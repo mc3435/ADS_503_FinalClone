@@ -1,0 +1,381 @@
+---
+title: "Groupwork"
+output: html_document
+date: "2023-06-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyr)
+library(caret)
+library(stats)
+library(factoextra)
+library(e1071)
+df <- read.csv('/Users/kenziecarter/Desktop/breast_cancer_FNA_data.csv')
+str(df)
+remove <- c("id","diagnosis")
+df_var <- df[, !(colnames(df) %in% remove)]
+
+#summary(df)
+cat("Dimensions of dataset:", dim(df))
+```
+```{r}
+# Calculate number of NAs in each column
+na_counts <- colSums(is.na(df))
+
+# Create a nice format output
+output <- paste(names(na_counts), na_counts, sep = ": ")
+
+# Print the output
+cat("NA counts:\n")
+cat(output, sep = "\n")
+```
+No NA values present in the dataset. 
+
+### Descriptive Stats
+```{r}
+# Function to compute descriptive statistics
+compute_descriptive_stats <- function(data) {
+  # Get dimensions of the dataset
+  dimensions <- dim(data)
+  
+  # Create a data frame to store the results
+  result <- data.frame(
+    Variable = character(),
+    N = integer(),
+    NAs = integer(),
+    Mean = numeric(),
+    Median = numeric(),
+    SD = numeric(),
+    Min = numeric(),
+    Max = numeric()
+  )
+  
+   # Set display options
+  options(scipen = 10, digits = 2)  # Adjust digits as per your preference
+  
+  # Iterate over each variable in the dataset
+  for (var in colnames(data)) {
+    # Compute descriptive statistics
+    n <- length(data[[var]])
+    nas <- sum(is.na(data[[var]]))
+    mean_val <- mean(data[[var]], na.rm = TRUE)
+    median_val <- median(data[[var]], na.rm = TRUE)
+    sd_val <- sd(data[[var]], na.rm = TRUE)
+    min_val <- min(data[[var]], na.rm = TRUE)
+    max_val <- max(data[[var]], na.rm = TRUE)
+    
+    # Append the results to the data frame
+    result <- rbind(result, data.frame(Variable = var,
+                                       N = n,
+                                       NAs = nas,
+                                       Mean = mean_val,
+                                       Median = median_val,
+                                       SD = sd_val,
+                                       Min = min_val,
+                                       Max = max_val))
+  }
+  
+  # Reset display options to default
+  #options(scipen = 0, digits = 7)
+  
+  # Return the computed descriptive statistics
+  return(result)
+}
+
+
+descriptive_stats <- compute_descriptive_stats(df_var)
+print(descriptive_stats)
+```
+
+#### Distribution of Outcomes
+
+```{r}
+# Calculate percentages
+percentage_M <- sum(df$diagnosis == "M") / nrow(df) * 100
+percentage_B <- sum(df$diagnosis == "B") / nrow(df) * 100
+
+# Print the percentages
+cat("Percentage of Malignant diagnosis:", percentage_M,"%\n")
+cat("Percentage of Benign diagnosis:", percentage_B,"%\n")
+```
+#### Exploring Possible Near Zero Variances
+```{r}
+degeneratecols <- nearZeroVar(df_var)
+degeneratecols
+```
+There appears to be no degenerate variables. 
+
+#### Splitting into groups to allow for easier visualizations
+```{r}
+# Identify the columns containing "mean"
+mean_columns <- grep("mean", names(df), value = TRUE)
+
+# Identify the columns containing "se"
+se_columns <- grep("se", names(df), value = TRUE)
+
+# Identify the columns containing "worst"
+worst_columns <- grep("worst", names(df), value = TRUE)
+
+# Split the dataframe into three groups based on the keywords
+df_mean <- df[, mean_columns]
+df_se <- df[, se_columns]
+df_worst <- df[, worst_columns]
+```
+
+
+#### Histograms of all predictor variables
+```{r}
+par(mfrow = c(5, 2))
+par(mar = c(2.5, 2, 1, 1))
+par(cex.main = 1)
+
+for (i in 1:ncol(df_mean)) {
+  hist(df_var[, i], xlab = names(df_var)[i], main = paste(names(df_var)[i]))
+}
+
+for (i in 1:ncol(df_se)) {
+  hist(df_var[, i], xlab = names(df_var)[i], main = paste(names(df_var)[i]))
+}
+
+for (i in 1:ncol(df_worst)) {
+  hist(df_var[, i], xlab = names(df_var)[i], main = paste(names(df_var)[i]))
+}
+
+```
+
+#### Temp corrplot to decrease visuals - update based on feature selection
+```{r eval=FALSE, include=FALSE}
+# Load required library
+library(corrplot)
+
+# Calculate the correlation matrix for each group
+cor_mean <- cor(df_mean)
+cor_se <- cor(df_se)
+cor_worst <- cor(df_worst)
+
+# Create correlation plots for each group
+corrplot(cor_mean, method = "color", type = "upper",
+         tl.col = "black", tl.srt = 45, 
+         mar = c(0, 0, 1.5, 0), addCoef.col = "black",
+         addCoef.asPercent = TRUE, number.cex = 0.7,
+         tl.cex = 0.7, diag = FALSE)
+         
+corrplot(cor_se, method = "color", type = "upper",
+         tl.col = "black", tl.srt = 45, 
+         mar = c(0, 0, 1.5, 0), addCoef.col = "black",
+         addCoef.asPercent = TRUE, number.cex = 0.7,
+         tl.cex = 0.7, diag = FALSE)
+         
+corrplot(cor_worst, method = "color", type = "upper",
+         tl.col = "black", tl.srt = 45, 
+         mar = c(0, 0, 1.5, 0), addCoef.col = "black",
+         addCoef.asPercent = TRUE, number.cex = 0.7,
+         tl.cex = 0.7, diag = FALSE)
+```
+
+
+#### Skew
+```{r pre_trans_skew}
+# List of group names
+group_names <- c("mean", "se", "worst")
+
+# Set the main title font size
+par(cex.main = 0.8)
+
+# Loop through each group
+for (group_name in group_names) {
+  # Subset the columns based on group name
+  group_columns <- grep(group_name, names(df_var), value = TRUE)
+
+  # Calculate skewness and create plots for each column in the group
+  num_plots <- length(group_columns)
+  num_rows <- ceiling(num_plots / 5)
+  num_cols <- min(num_plots, 5)
+  
+  # Set the plotting layout for the current group
+  par(mfrow = c(num_rows, num_cols))
+  
+  # Loop through each column in the group
+  for (i in 1:num_plots) {
+    col_name <- group_columns[i]
+    skewness <- skewness(df_var[[col_name]])
+    
+    # Create a histogram to visualize skewness
+    hist(df_var[[col_name]], main = col_name,
+         xlab = "Values", ylab = "Frequency",
+         col = "gray", border = "black")
+    
+    # Add skewness value to the plot
+    mtext(paste("Skew:", round(skewness, 2)), side = 3, line = -.25, cex = 0.5, font = 1)
+  }
+  
+  # Reset the plotting layout
+  par(mfrow = c(1, 1))
+}
+```
+#### skew in df format for easy reference
+```{r pre_trans_skew_df}
+# List of group names
+group_names <- c("mean", "se", "worst")
+
+# Create an empty list to store the skewness values
+skewness_list <- list()
+
+# Loop through each group
+for (group_name in group_names) {
+  # Subset the columns based on group name
+  group_columns <- grep(group_name, names(df_var), value = TRUE)
+  
+  # Loop through each column in the group
+  for (col_name in group_columns) {
+    skewness <- skewness(df_var[[col_name]])
+    
+    # Print skewness value
+    cat("Skewness for", col_name, ":", skewness, "\n")
+    
+    # Store the skewness value in the list
+    skewness_list[[col_name]] <- skewness
+  }
+}
+
+# Convert the skewness list to a dataframe
+skewness_df <- data.frame(Skewness = unlist(skewness_list))
+
+# Print the skewness dataframe
+print(skewness_df)
+```
+
+
+#### Rough PCA for kmeans
+```{r}
+options(scipen = 999)
+
+# Convert the dataframe to a matrix
+df_pca <- as.matrix(df_var)
+
+# Perform PCA
+df.pca <- prcomp(df_pca, center = TRUE, scale. = TRUE)
+
+# Calculate percentage variance explained
+var_explained <- round(df.pca$sdev^2 / sum(df.pca$sdev^2) * 100, 4)
+
+# Plot Scree Plot
+library(factoextra)
+library(ggplot2)
+
+fviz_eig(df.pca,
+         main = "Scree Plot of Principal Components",
+         xlab = "Principal Components",
+         ylab = "Percent Variance Explained",
+         barcolor = "grey", barfill = "grey",
+         linecolor = "blue", addlabels = TRUE,
+         ggtheme = theme_classic())
+
+
+```
+2 or 3 principal components. revisit & decide later.
+
+#### K-means Clustering
+```{r}
+df_scale <- scale(df_var)
+
+#Kmeans for 2 clusters
+km2.res <- kmeans(df3, 2)
+
+km2.plot <- fviz_cluster(km2.res, data = df_scale)
+
+km2.plot <- km2.plot + ggtitle("K-Means Clustering Plot - 2 Clusters")
+
+km2.plot
+
+#Kmeans for 3 clusters
+km3.res <- kmeans(df3, 3)
+
+km3.plot <- fviz_cluster(km3.res, data = df_scale)
+
+km3.plot <- km3.plot + ggtitle("K-Means Clustering Plot - 3 Clusters")
+
+km3.plot
+```
+
+### Data Transformations
+```{r}
+# define the transformation or pre-processing 
+df_trans <- preProcess(df_var, method = c("BoxCox", "center", "scale"))
+#apply the transformation
+df_boxcox <- predict(df_trans, df_var)
+head(df_boxcox[,1:4])
+```
+
+#### Post process skew 
+```{r}
+# List of group names
+group_names <- c("mean", "se", "worst")
+
+# Set the main title font size
+par(cex.main = 0.8)
+
+# Loop through each group
+for (group_name in group_names) {
+  # Subset the columns based on group name
+  group_columns <- grep(group_name, names(df_boxcox), value = TRUE)
+
+  # Calculate skewness and create plots for each column in the group
+  num_plots <- length(group_columns)
+  num_rows <- ceiling(num_plots / 5)
+  num_cols <- min(num_plots, 5)
+  
+  # Set the plotting layout for the current group
+  par(mfrow = c(num_rows, num_cols))
+  
+  # Loop through each column in the group
+  for (i in 1:num_plots) {
+    col_name <- group_columns[i]
+    skewness <- skewness(df_boxcox[[col_name]])
+    
+    # Create a histogram to visualize skewness
+    hist(df_boxcox[[col_name]], main = col_name,
+         xlab = "Values", ylab = "Frequency",
+         col = "gray", border = "black")
+    
+    # Add skewness value to the plot
+    mtext(paste("Skew:", round(skewness, 2)), side = 3, line = -.25, cex = 0.5, font = 1)
+  }
+  
+  # Reset the plotting layout
+  par(mfrow = c(1, 1))
+}
+```
+```{r pre_trans_skew_df}
+# List of group names
+group_names <- c("mean", "se", "worst")
+
+# Create an empty list to store the skewness values
+skewness_list <- list()
+
+# Loop through each group
+for (group_name in group_names) {
+  # Subset the columns based on group name
+  group_columns <- grep(group_name, names(df_var), value = TRUE)
+  
+  # Loop through each column in the group
+  for (col_name in group_columns) {
+    skewness <- skewness(df_boxcox[[col_name]])
+    
+    # Print skewness value
+    cat("Skewness for", col_name, ":", skewness, "\n")
+    
+    # Store the skewness value in the list
+    skewness_list[[col_name]] <- skewness
+  }
+}
+
+# Convert the skewness list to a dataframe
+skewness_df <- data.frame(Skewness = unlist(skewness_list))
+
+# Print the skewness dataframe
+print(skewness_df)
+```
+
