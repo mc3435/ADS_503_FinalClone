@@ -115,7 +115,7 @@ ggpairs(df_se, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth")
 ggpairs(df_worst, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
   labs(title="Feature Density & Correlation - Cancer Worst (Mean of the three largest values)")+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=20))
 
-# Pearson Correlation
+# Pearson Correlation of all features
 df_clean$diagnosis <- as.integer(factor(df_clean$diagnosis))-1
 df_clean
 correlations <- cor(df_clean,method="pearson")
@@ -124,7 +124,6 @@ corrplot(correlations, number.cex = .9, method = "square",
          type = "full", tl.cex=0.8,tl.col = "black")
 
 ### Calculate the VIF values (using linear model) for the predictor variables to look for multicollinearity 
-
 lm_model <- lm(diagnosis ~ ., data = df_clean)
 vif_values <- vif(lm_model)
 vif_table <- data.frame(Variable = names(vif_values), VIF = vif_values)
@@ -137,7 +136,6 @@ vif_plot <- ggplot(vif_table, aes(x = reorder(Variable, VIF), y = VIF)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   ggtitle("VIF Values of Predictor Variables (Ascending Order)")
 print(vif_plot)
-
 
 ### Calculate the eigenvalues for the predictor variables to look for multicollinearity 
 # Small eigenvalues suggest potential multicollinearity issues
@@ -193,11 +191,9 @@ par(mar = c(5, 5, 4, 2) + 0.1)
 colors <- c("blue", "red")
 names(colors) = unique(diagnosis)
 set.seed(31452)
-
 tsne <- Rtsne(var_only, dims=2, perplexity=30, 
               verbose=TRUE, pca=TRUE, 
               theta=0.01, max_iter=1000)
-
 plot(tsne$Y, t='n', main="t-Distributed Stochastic Neighbor Embedding (t-SNE)",
      xlab="t-SNE 1st dimm.", ylab="t-SNE 2nd dimm.")
 text(tsne$Y, labels=diagnosis, cex=0.5, col=colors[diagnosis])
