@@ -54,7 +54,6 @@ library(relaimpo)
 library(factoextra)
 library(Rtsne)
 
-install.packages("Rtsne")
 # Load the CSV file into a dataframe & assess the data
 raw.data <- read.csv('C:/MIDS/ADS-503_Applied_Predictive_Modeling/ADS_503_team_2_final_project/data/breast_cancer_FNA_data.csv')
 df <- read.csv('C:/MIDS/ADS-503_Applied_Predictive_Modeling/ADS_503_team_2_final_project/data/breast_cancer_FNA_data.csv', header=T)
@@ -199,7 +198,7 @@ plot(tsne$Y, t='n', main="t-Distributed Stochastic Neighbor Embedding (t-SNE)",
 text(tsne$Y, labels=diagnosis, cex=0.5, col=colors[diagnosis])
 
 # Create PCA biplot with customized aesthetics
-biplot <- fviz_pca_biplot(var_pca,
+pca_biplot <- fviz_pca_biplot(var_pca,
                           geom.ind = "point",
                           col.ind = diagnosis,
                           palette = c("blue", "red"),
@@ -212,4 +211,4 @@ biplot <- fviz_pca_biplot(var_pca,
                           legend.position = "right",
                           legend.shape = "circle",
                           legend.label = c("Benign", "Malignant"))
-print(biplot)
+pca_biplot
