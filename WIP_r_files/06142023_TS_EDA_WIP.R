@@ -52,9 +52,9 @@ library(reshape2)
 library(corrplot)
 library(relaimpo)
 library(factoextra)
+library(Rtsne)
 
-install.packages("factoextra")
-
+install.packages("Rtsne")
 # Load the CSV file into a dataframe & assess the data
 raw.data <- read.csv('C:/MIDS/ADS-503_Applied_Predictive_Modeling/ADS_503_team_2_final_project/data/breast_cancer_FNA_data.csv')
 df <- read.csv('C:/MIDS/ADS-503_Applied_Predictive_Modeling/ADS_503_team_2_final_project/data/breast_cancer_FNA_data.csv', header=T)
@@ -166,18 +166,54 @@ tolerance_plot <- ggplot(tolerance_table, aes(x = reorder(Variable, Tolerance), 
 tolerance_plot
 
 ### Principal Components Analysis (PCA) transform
-var_only <- df_clean[, !(names(df_clean) %in% c("diagnosis"))]
 
-var_pca <- prcomp(var_only, center=TRUE, scale.=TRUE)
-plot(var_pca, type="l", main='',color='red')
+# Perform PCA
+var_only <- df_clean[, !(names(df_clean) %in% c("diagnosis"))] # predictor variables only
+diagnosis <- raw.data[, 2] # target variable only 
+var_pca <- prcomp(var_only, center = TRUE, scale. = TRUE)
 
-grid(nx = 10, ny = 14)
-title(main = "Principal components weight", sub = NULL, xlab = "Components")
-box()
+# Plot PCA with customized aesthetics
+fviz_eig(var_pca, addlabels = TRUE, ylim = c(0, 50),
+         title = "Principal Components Analysis (PCA)",
+         subtitle = NULL,
+         xlab = "Principal Component",
+         ylab = "Proportion of Variance Explained",
+         geom = "line",
+         linecolor = "red",
+         pointsize = 2,
+         pointshape = 21,
+         pointfill = "white",
+         pointcolor = "red",
+         legend.title = "Principal Components",
+         legend.position = "right")
+# Adjust plot margins
+par(mar = c(5, 5, 4, 2) + 0.1)
 
-ggbiplot(bc.pca, choices=1:2, obs.scale = 1, var.scale = 1, groups = bc.diag, 
-         ellipse = TRUE, circle = TRUE, varname.size = 3, ellipse.prob = 0.68, circle.prob = 0.69) +
-  scale_color_discrete(name = 'Diagnosis (B: beningn, M: malignant)') + theme_bw() + 
-  labs(title = "Principal Component Analysis", 
-       subtitle = "1. Data distribution in the plan of PC1 and PC2\n2. Directions of components in the same plane") +
-  theme(legend.direction = 'horizontal', legend.position = 'bottom')
+### t-SNE transform for dimensionality reduction
+colors <- c("blue", "red")
+names(colors) = unique(diagnosis)
+set.seed(31452)
+
+tsne <- Rtsne(var_only, dims=2, perplexity=30, 
+              verbose=TRUE, pca=TRUE, 
+              theta=0.01, max_iter=1000)
+
+plot(tsne$Y, t='n', main="t-Distributed Stochastic Neighbor Embedding (t-SNE)",
+     xlab="t-SNE 1st dimm.", ylab="t-SNE 2nd dimm.")
+text(tsne$Y, labels=diagnosis, cex=0.5, col=colors[diagnosis])
+
+# Create PCA biplot with customized aesthetics
+biplot <- fviz_pca_biplot(var_pca,
+                          geom.ind = "point",
+                          col.ind = diagnosis,
+                          palette = c("blue", "red"),
+                          addEllipses = TRUE,
+                          axes.linetype = "dashed",
+                          title = "Principal Components Analysis (PCA)",
+                          xlab = "PC1 (Proportion of Variance Explained: 32.3%)",
+                          ylab = "PC2 (Proportion of Variance Explained: 29.7%)",
+                          legend.title = "Diagnosis",
+                          legend.position = "right",
+                          legend.shape = "circle",
+                          legend.label = c("Benign", "Malignant"))
+print(biplot)
