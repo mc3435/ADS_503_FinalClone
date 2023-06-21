@@ -212,3 +212,28 @@ pca_biplot <- fviz_pca_biplot(var_pca,
                           legend.shape = "circle",
                           legend.label = c("Benign", "Malignant"))
 pca_biplot
+
+### Feature Importance
+
+# Prepare the data for random forest
+df_rf <- df_clean
+df_rf$diagnosis <- as.factor(df_rf$diagnosis)
+
+# Train a random forest model
+rf_model <- randomForest(diagnosis ~ ., data = df_rf, ntree = 500, importance = TRUE)
+
+# Plot feature importance
+var_importance <- importance(rf_model)
+var_names <- row.names(var_importance)  
+var_importance <- data.frame(Variable = var_names, Importance = var_importance[, "MeanDecreaseGini"])
+
+# Rearrange the rows in ascending order of importance
+var_importance <- var_importance[order(var_importance$Importance), ]
+
+importance_plot <- ggplot(var_importance, aes(x = Variable, y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(x = "Variable", y = "Mean Decrease Gini") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Random Forest - Feature Importance (Ascending Order)")
+
+print(importance_plot)
