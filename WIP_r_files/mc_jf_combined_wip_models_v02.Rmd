@@ -1,0 +1,826 @@
+```{r}
+# load in dataset
+library(ggplot2)
+library(tidyr)
+library(caret)
+library(stats)
+library(factoextra)
+library(e1071)
+library(pROC)
+library(xgboost)
+df <- read.csv('/Users/kenziecarter/Desktop/data.csv')
+# remove the x and Id from the end of the data set since it is all null values
+# "x" column is an error from csv column spacing, and can be removed entirely. 
+df$X <- NULL
+df$id <- NULL
+df_diag <- df
+```
+
+##### Summary Stats, Dimensions & NA values
+
+```{r}
+# get descriptive statistics for the data set
+summary(df)
+```
+
+```{r}
+# data set dimensions
+cat("Dimensions of dataset:", dim(df))
+```
+
+```{r}
+# NA values
+df_na_counts <- sum(is.na(df))
+cat("NA Sum:", df_na_counts)
+```
+
+#### Distribution of Outcomes
+
+```{r}
+# Calculate percentages
+percentage_M <- sum(df$diagnosis == "M") / nrow(df) * 100
+percentage_B <- sum(df$diagnosis == "B") / nrow(df) * 100
+
+# Print the percentages
+cat("Percentage of Malignant diagnosis:", percentage_M,"%\n")
+cat("Percentage of Benign diagnosis:", percentage_B,"%\n")
+```
+
+#### Exploring Possible Near Zero Variances
+
+```{r}
+degeneratecols <- nearZeroVar(df)
+degeneratecols
+```
+
+There appears to be no degenerate variables.
+
+#### Splitting into groups to allow for easier visualizations
+
+```{r}
+# Identify the columns containing "mean"
+mean_columns <- grep("mean", names(df), value = TRUE)
+
+# Identify the columns containing "se"
+se_columns <- grep("se", names(df), value = TRUE)
+
+# Identify the columns containing "worst"
+worst_columns <- grep("worst", names(df), value = TRUE)
+
+# Split the dataframe into three groups based on the keywords
+df_mean <- df[, mean_columns]
+df_se <- df[, se_columns]
+df_worst <- df[, worst_columns]
+```
+
+#### df_var data frame for visualizing just predictors
+
+```{r}
+remove <- c("diagnosis")
+df_var <- df[, !(colnames(df) %in% remove)]
+```
+
+#### Histograms of all predictor variables
+
+```{r}
+par(mfrow = c(5, 2))
+par(mar = c(2.5, 2, 1, 1))
+par(cex.main = 1)
+
+for (i in 1:ncol(df_mean)) {
+  hist(df_var[, i], xlab = names(df_var)[i], main = paste(names(df_var)[i]))
+}
+
+for (i in 1:ncol(df_se)) {
+  hist(df_var[, i], xlab = names(df_var)[i], main = paste(names(df_var)[i]))
+}
+
+for (i in 1:ncol(df_worst)) {
+  hist(df_var[, i], xlab = names(df_var)[i], main = paste(names(df_var)[i]))
+}
+
+```
+
+```{r}
+# build a boxplot to identity the outliers that were produced in the summary statistics
+# split the data into groups of 5 and create 6 graphs for the plots since there are 30 features and 1 target
+# data will be split into variables bx_1, bx_2, bx_3, bx_4, bx_5 for boxplot purposes
+colors <- c('red', 'blue')
+bx_1 <- df[, 2:6]
+bx_2 <- df[, 7:12]
+bx_3 <- df[, 13:18]
+bx_4 <- df[, 19:24]
+bx_5 <- df[, 25:31]
+```
+
+All of these predictors have outliers however the predictor with the most are texture_mean, area_mean ad smoothness mean.
+
+For bx_2 all of these also have outliers and I would say they all have some pretty significant outliers.
+
+```{r}
+# Create a data frame for plotting
+plot_data_1 <- data.frame(
+  value = c(bx_1$radius_mean, bx_1$texture_mean, bx_1$perimeter_mean, bx_1$smoothness_mean, bx_1$area_mean),
+  diagnosis = rep(df$diagnosis, 5),
+  feature = rep(c("Radius Mean", "Texture Mean", "Perimeter Mean", "Smoothness Mean", "Area Mean"), each = nrow(df))
+)
+
+# Create the boxplot using ggplot2
+ggplot(plot_data_1, aes(x = diagnosis, y = value, fill = diagnosis)) +
+  geom_boxplot() +
+  facet_wrap(~ feature, scales = "free_y", nrow = 1) +
+  scale_fill_manual(values = colors, labels = c('Bengin', 'Malignant')) +
+  xlab("Diagnosis") +
+  ylab("Value") +
+  theme(legend.position = "top")
+```
+
+```{r}
+# Create a data frame for plotting
+plot_data_2 <- data.frame(
+  value = c(bx_2$fractal_dimension_mean,bx_2$symmetry_mean, bx_2$radius_se, bx_2$concave.points_mean, bx_2$concavity_mean,bx_2$compactness_mean  ),
+  diagnosis = rep(df$diagnosis, 6),
+  feature = rep(c("FractalMean", "Sym Mean", "Radius Se", "Con Mean", "Concavity Mean", 'Compact Mean'), each = nrow(df))
+)
+
+# Create the boxplot using ggplot2
+ggplot(plot_data_2, aes(x = diagnosis, y = value, fill = diagnosis)) +
+  geom_boxplot() +
+  facet_wrap(~ feature, scales = "free_y", nrow = 1) +
+  scale_fill_manual(values = colors, labels = c('Bengin', 'Malignant')) +
+  xlab("Diagnosis") +
+  ylab("Value") +
+  theme(legend.position = "top")
+```
+
+```{r}
+# Create a data frame for plotting
+plot_data_3 <- data.frame(
+  value = c(bx_3$texture_se,bx_3$perimeter_se, bx_3$area_se, bx_3$smoothness_se, bx_3$compactness_se, bx_3$concavity_se),
+  diagnosis = rep(df$diagnosis, 6),
+  feature = rep(c("Texture Se", "Perimeter Se", "Area Se", "Smoothness Se", "Compact Se", 'Concave Se'), each = nrow(df))
+)
+
+# Create the boxplot using ggplot2
+ggplot(plot_data_3, aes(x = diagnosis, y = value, fill = diagnosis)) +
+  geom_boxplot() +
+  facet_wrap(~ feature, scales = "free_y", nrow = 1) +
+  scale_fill_manual(values = colors, labels = c('Bengin', 'Malignant')) +
+  xlab("Diagnosis") +
+  ylab("Value") +
+  theme(legend.position = "top")
+
+```
+
+```{r}
+
+# Create a data frame for plotting
+plot_data_4 <- data.frame(
+  value = c(bx_4$concave.points_se,bx_4$symmetry_se, bx_4$fractal_dimension_se, bx_4$radius_worst, bx_4$texture_worst, bx_4$perimeter_worst),
+  diagnosis = rep(df$diagnosis, 6),
+  feature = rep(c("Concave Se", "Symmetry Se", "Fractal Se", "Radius Worst", "Texture Worst", 'Perimeter Worst'), each = nrow(df))
+)
+
+# Create the boxplot 
+ggplot(plot_data_4, aes(x = diagnosis, y = value, fill = diagnosis)) +
+  geom_boxplot() +
+  facet_wrap(~ feature, scales = "free_y", nrow = 1) +
+  scale_fill_manual(values = colors, labels = c('Bengin', 'Malignant')) +
+  xlab("Diagnosis") +
+  ylab("Value") +
+  theme(legend.position = "top")
+
+```
+
+```{r}
+# Create a data frame for plotting
+plot_data_5 <- data.frame(
+  value = c(bx_5$area_worst ,bx_5$smoothness_worst, bx_5$compactness_worst, bx_5$concave.points_worst, bx_5$symmetry_worst, bx_5$fractal_dimension_worst),
+  diagnosis = rep(df$diagnosis, 6),
+  feature = rep(c("Area Worst", "Smoothness Worst", "Compact Worst", "Concave Worst", "symmetry Worst", 'Fractal Worst'), each = nrow(df))
+)
+
+# Create the boxplot 
+ggplot(plot_data_5, aes(x = diagnosis, y = value, fill = diagnosis)) +
+  geom_boxplot() +
+  facet_wrap(~ feature, scales = "free_y", nrow = 1) +
+  scale_fill_manual(values = colors, labels = c('Bengin', 'Malignant')) +
+  xlab("Diagnosis") +
+  ylab("Value") +
+  theme(legend.position = "top")
+```
+
+#### Skew
+
+```{r pre_trans_skew}
+# List of group names
+group_names <- c("mean", "se", "worst")
+
+# Set the main title font size
+par(cex.main = 0.8)
+
+# Loop through each group
+for (group_name in group_names) {
+  # Subset the columns based on group name
+  group_columns <- grep(group_name, names(df_var), value = TRUE)
+
+  # Calculate skewness and create plots for each column in the group
+  num_plots <- length(group_columns)
+  num_rows <- ceiling(num_plots / 5)
+  num_cols <- min(num_plots, 5)
+  
+  # Set the plotting layout for the current group
+  par(mfrow = c(num_rows, num_cols))
+  
+  # Loop through each column in the group
+  for (i in 1:num_plots) {
+    col_name <- group_columns[i]
+    skewness <- skewness(df_var[[col_name]])
+    
+    # Create a histogram to visualize skewness
+    hist(df_var[[col_name]], main = col_name,
+         xlab = "Values", ylab = "Frequency",
+         col = "gray", border = "black")
+    
+    # Add skewness value to the plot
+    mtext(paste("Skew:", round(skewness, 2)), side = 3, line = -.25, cex = 0.5, font = 1)
+  }
+  
+  # Reset the plotting layout
+  par(mfrow = c(1, 1))
+}
+```
+
+#### Skew in dataframe format for easy reference
+
+```{r pre_trans_skew_df}
+# List of group names
+group_names <- c("mean", "se", "worst")
+
+# Create an empty list to store the skewness values
+skewness_list <- list()
+
+# Loop through each group
+for (group_name in group_names) {
+  # Subset the columns based on group name
+  group_columns <- grep(group_name, names(df_var), value = TRUE)
+  
+  # Loop through each column in the group
+  for (col_name in group_columns) {
+    skewness <- skewness(df_var[[col_name]])
+    
+    # Print skewness value
+    cat("Skewness for", col_name, ":", skewness, "\n")
+    
+    # Store the skewness value in the list
+    skewness_list[[col_name]] <- skewness
+  }
+}
+
+# Convert the skewness list to a dataframe
+skewness_df <- data.frame(Skewness = unlist(skewness_list))
+
+# Print the skewness dataframe
+print(skewness_df)
+```
+
+#### Rough PCA for kmeans - Replace w !!!!Trevors!!!!!
+
+```{r}
+options(scipen = 999)
+
+# Convert the dataframe to a matrix
+df_pca <- as.matrix(df_var)
+
+# Perform PCA
+df.pca <- prcomp(df_pca, center = TRUE, scale. = TRUE)
+
+# Calculate percentage variance explained
+var_explained <- round(df.pca$sdev^2 / sum(df.pca$sdev^2) * 100, 4)
+
+# Plot Scree Plot
+library(factoextra)
+library(ggplot2)
+
+fviz_eig(df.pca,
+         main = "Scree Plot of Principal Components",
+         xlab = "Principal Components",
+         ylab = "Percent Variance Explained",
+         barcolor = "grey", barfill = "grey",
+         linecolor = "blue", addlabels = TRUE,
+         ggtheme = theme_classic())
+
+
+```
+
+2 or 3 principal components. revisit & decide later.
+
+#### K-means Clustering
+
+```{r}
+df_scale <- scale(df_var)
+
+#Kmeans for 2 clusters
+km2.res <- kmeans(df_scale, 2)
+
+km2.plot <- fviz_cluster(km2.res, data = df_scale)
+
+km2.plot <- km2.plot + ggtitle("K-Means Clustering Plot - 2 Clusters")
+
+km2.plot
+
+
+#Kmeans for 3 clusters
+km3.res <- kmeans(df_scale, 3)
+
+km3.plot <- fviz_cluster(km3.res, data = df_scale)
+
+km3.plot <- km3.plot + ggtitle("K-Means Clustering Plot - 3 Clusters")
+
+km3.plot
+```
+
+### Data Transformations - this may need to be removed
+
+```{r}
+# define the transformation or pre-processing 
+df_trans <- preProcess(df_var, method = c("BoxCox", "center", "scale"))
+#apply the transformation
+df_boxcox <- predict(df_trans, df_var)
+head(df_boxcox[,1:4])
+
+#Rearranging variables for easiest continuity
+df_original <- df_var
+df <- df_boxcox
+```
+
+```{r post_trans_skew_df}
+# List of group names
+group_names <- c("mean", "se", "worst")
+
+# Create an empty list to store the skewness values
+skewness_list <- list()
+
+# Loop through each group
+for (group_name in group_names) {
+  # Subset the columns based on group name
+  group_columns <- grep(group_name, names(df), value = TRUE)
+  
+  # Loop through each column in the group
+  for (col_name in group_columns) {
+    skewness <- skewness(df[[col_name]])
+    
+    # Print skewness value
+    cat("Skewness for", col_name, ":", skewness, "\n")
+    
+    # Store the skewness value in the list
+    skewness_list[[col_name]] <- skewness
+  }
+}
+
+# Convert the skewness list to a dataframe
+skewness_df <- data.frame(Skewness = unlist(skewness_list))
+
+# Print the skewness dataframe
+print(skewness_df)
+```
+
+
+### script k-fold cross, this one works
+
+```{r}
+df_diag$diagnosis = as.integer(factor(df_diag$diagnosis))-1
+df_var$diagnosis <- df_diag$diagnosis
+
+# create folds for k-fold cross validation
+df_preprocess <- preProcess(df_var, method = c('BoxCox', 'center', 'scale'))
+df_predict <- predict(df_preprocess,df_var)
+
+# create folds and apply them
+df_folds <- createFolds(df_var$diagnosis, returnTrain = TRUE)
+crtl_df <- trainControl(method = 'cv',
+                        summaryFunction = twoClassSummary,
+                        classProbs = TRUE,
+                        savePredictions = TRUE,
+                        index = df_folds)
+```
+
+```{r}
+# 1st will be LR cross validation
+pen_grid <-  expand.grid(alpha = c(0, .4, .8, 1),
+                        lambda = seq(.01, .2, length = 10))
+
+
+set.seed(100)
+log_reg_fit <- train(df_predict,
+                     y_value,
+                     method = 'glmnet',
+                     tuneGrid = pen_grid,
+                     metric = 'ROC',
+                     trControl = crtl_df)
+                     #family = "binomial")
+log_reg_fit
+confusionMatrix(log_reg_fit, norm = 'none')
+cv_lr_roc <- roc(response = log_reg_fit$pred$obs,
+                 predictor = log_reg_fit$pred$M,
+                 levels = rev(levels(log_reg_fit$pred$obs)))
+```
+
+```{r}
+#Universal XGBoost Set Up
+
+#parameters
+param <- list(
+  "objective"           = "binary:logistic",
+  "eval_metric"         = "auc",
+  "eta"                 = 0.01,
+  "max_depth"           = 6,
+  "subsample"           = 0.8,
+  "colsample_bytree"    = 0.8,
+  "min_child_weight"    = 1,
+  "gamma"               = 0
+)
+
+xgb.nround <- 1000
+earlyStoppingRound <- 250
+xgb.nfold <- 5
+```
+
+#Cross Validation XGBoost
+```{r}
+#matrix prep 
+set.seed(0)
+for (i in 1:xgb.nfold) {
+  # Split the data into training and testing sets based on the fold
+  cvtrain_indices <- unlist(df_folds[-i])
+  cvtest_indices <- df_folds[[i]]
+  cvtrain_data <- df_var[cvtrain_indices, ]
+  cvtest_data <- df_var[cvtest_indices, ]}
+  
+# Create xgb.DMatrix for training and testing data
+  cvtrain_data_matrix <- as.matrix(cvtrain_data[, -1])
+  cvtrain_data_label <- as.numeric(cvtrain_data$diagnosis)
+  cv_xgbtrain <- xgb.DMatrix(data = cvtrain_data_matrix, label = cvtrain_data_label)
+  
+  cvtest_data_matrix <- as.matrix(cvtest_data[, -1])
+  cvtest_data_label <- as.numeric(cvtest_data$diagnosis)
+  cv_xgbtest <- xgb.DMatrix(data = cvtest_data_matrix, label = cvtest_data_label)
+
+# Train the xgboost model using xgb.cv
+  cv_model_xgb_crossval <- xgb.cv(
+    params = param,
+    data = cv_xgbtrain,
+    nrounds = xgb.nround,
+    maximize = TRUE,
+    nfold = xgb.nfold,
+    prediction = TRUE,
+    early_stopping_round = earlyStoppingRound, 
+    verbose = 0
+  )
+
+# Extract the best iteration from the cross-validated model
+  best_iteration <- cv_model_xgb_crossval$best_iteration
+
+# Train the xgboost model using xgboost with the best iteration
+  cv_model_xgb <- xgboost(
+    params = param,
+    data = cv_xgbtrain,
+    nrounds = best_iteration,
+    maximize = TRUE,
+          verbose = 0 
+    
+  )
+  
+# Make predictions on the test set using the xgboost model
+  cv_predictions <- predict(cv_model_xgb, newdata = cv_xgbtest)
+```
+
+
+```{r}
+#Metrics
+# Convert predicted labels and actual labels to factors with the same levels
+cv_predicted_labels <- factor(ifelse(cv_predictions > 0.5, 1, 0), levels = c(0, 1))
+cvtest_data$diagnosis <- factor(cvtest_data$diagnosis, levels = c(0, 1))
+
+# Create a confusion matrix
+cv_CM <- confusionMatrix(data = cv_predicted_labels, reference = cvtest_data$diagnosis)
+cv_CM
+
+# Convert predicted probabilities and actual labels to vectors
+cv_predicted_probs <- as.numeric(cv_predictions)
+cv_actual_labels <- as.numeric(as.character(cvtest_data$diagnosis))
+
+# Calculate the ROC curve
+cv_roc_results_xgb <- roc(cv_actual_labels, cv_predicted_probs)
+
+# Get the sensitivity value (True Positive Rate)
+cv_sens <- cv_CM$byClass["Sensitivity"]
+cv_sens
+cv_spec <- cv_CM$byClass["Specificity"]
+cv_spec
+
+```
+
+
+#### 70/30 Split
+```{r}
+#randomly split the data 70/30
+df_diag$diagnosis = as.integer(factor(df_diag$diagnosis))-1
+trainingRows <- createDataPartition(df_diag$diagnosis, p = 0.7, list = FALSE)
+df_train <- df_diag[trainingRows, ]
+df_test <- df_diag[-trainingRows, ]
+X_train <- df_train[, -which(names(df_train) == "diagnosis")]
+y_train <- df_train$diagnosis
+X_test <- df_test[, -which(names(df_test) == "diagnosis")]
+y_test <- df_test$diagnosis
+```
+
+```{r}
+# create model 3 random 70/30 split for LR
+set.seed(100)
+log_reg_fit_3 <- train(x =X_train, y= y_train,
+                     method = 'glmnet',
+                     metric = 'ROC',
+                     tuneGrid = pen_grid_2,
+                     trControl = trainControl(classProbs = TRUE, summaryFunction = twoClassSummary))
+
+log_reg_fit_3
+# obtain predictions 
+predictions_lr_3 <- predict(log_reg_fit_3, newdata = X_test)
+# build confusion matrix
+# set y_test as a factor
+y_test_factor_3 <- as.factor(y_test)
+confusionMatrix(data = predictions_lr_3, reference = y_test_factor_3)
+
+# calculate the ROC scores
+y_test_num_3 <- as.numeric(y_test_factor_3)
+roc_results_lr_3 <- roc(response = predictions_lr_3, predictor = y_test_num_3)
+roc_results_lr_3
+```
+
+```{r}
+set.seed(0)
+#Random Split XGBoost
+
+#matrix prep 
+rs_xgbtrain <- xgb.DMatrix(data = as.matrix(X_train), label = y_train)
+rs_xgbtest <- xgb.DMatrix(data = as.matrix(X_test), label = y_test)
+
+rs_model_xgb_crossval <- xgb.cv(
+  params = param, 
+  data = rs_xgbtrain,
+  nrounds = xgb.nround,
+  maximize = TRUE,
+  nfold = xgb.nfold, 
+  prediction = TRUE,
+  early_stopping_round=earlyStoppingRound, 
+  verbose = 0
+)
+
+#Model
+rs_model_xgb <- xgboost(
+  params = param, 
+  data = rs_xgbtrain,
+  nrounds = xgb.nround,
+  maximize = TRUE, 
+  early_stopping_round=earlyStoppingRound, 
+  verbose = 0
+)
+
+#Predict
+X_test$predicted <- round(predict(object = rs_model_xgb ,newdata = rs_xgbtest),0)
+```
+
+
+```{r}
+#Metrics
+RS_xgb_AUC <- auc(y_test, X_test$predicted)
+RS_xgb_AUC
+
+rs_CM <- confusionMatrix(factor(X_test$predicted),factor(y_test))
+rs_CM 
+
+# Get the sensitivity value (True Positive Rate)
+rs_sens <- rs_CM$byClass["Sensitivity"]
+rs_sens
+rs_spec <- rs_CM$byClass["Specificity"]
+rs_spec
+
+# calculate the ROC scores
+rs_roc_results_xgb <- roc(response = X_test$predicted, predictor = y_test_num_3)
+rs_roc_results_xgb
+```
+
+```{r}
+# perform a random oversampling on the dataset
+library(ROSE)
+
+# Splitting the data into training and testing sets
+trainingRows_2 <- createDataPartition(df_diag$diagnosis, p = 0.7, list = FALSE)
+df_train_2 <- df_diag[trainingRows_2, ]
+df_test_2 <- df_diag[-trainingRows_2, ]
+
+# Separate predictors and target variables in the training set
+X_train_2 <- df_train_2[, -which(names(df_train_2) == "diagnosis")]
+y_train_2 <- df_train_2$diagnosis
+
+# Perform oversampling on the training set
+oversampled_data <- ovun.sample(diagnosis ~ ., data = df_train_2, method = "over")
+
+# Extract the oversampled predictors and target variables
+X_train_oversampled <- oversampled_data$data[, -which(names(oversampled_data$data) == "diagnosis")]
+y_train_oversampled <- oversampled_data$data$diagnosis
+
+# Separate predictors and target variables in the testing set
+X_test_oversampled <- df_test_2[, -which(names(df_test_2) == "diagnosis")]
+y_test_oversampled <- df_test_2$diagnosis
+```
+
+```{r}
+# create model 2 using the random over sampler technique on a 70/30 split
+pen_grid_2 <-  expand.grid(alpha = c(0, .4, .8, 1),
+                        lambda = seq(.01, .2, length = 10))
+set.seed(100)
+log_reg_fit_2 <- train(x =X_train_oversampled, y= y_train_oversampled,
+                     method = 'glmnet',
+                     metric = 'ROC',
+                     tuneGrid = pen_grid_2,
+                     trControl = trainControl(classProbs = TRUE, summaryFunction = twoClassSummary))
+
+log_reg_fit_2
+# obtain predictions 
+predictions_lr <- predict(log_reg_fit_2, newdata = X_test_oversampled)
+# build confusion matrix
+# set y_test as a facotr
+y_test_factor <- as.factor(y_test_oversampled)
+confusionMatrix(data = predictions_lr, reference = y_test_factor)
+
+# calculate the ROC scores
+y_test_num <- as.numeric(y_test_factor)
+roc_results_lr <- roc(response = predictions_lr, predictor = y_test_num)
+```
+
+```{r}
+set.seed(0)
+#Oversampled XGBoost
+
+#matrix prep 
+os_xgbtrain <- xgb.DMatrix(data = as.matrix(X_train_oversampled), label = y_train_oversampled)
+os_xgbtest <- xgb.DMatrix(data = as.matrix(X_test_oversampled), label = y_test_oversampled)
+
+os_model_xgb_crossval <- xgb.cv(
+  params = param, 
+  data = os_xgbtrain,
+  nrounds = xgb.nround,
+  maximize = TRUE,
+  nfold = xgb.nfold, 
+  prediction = TRUE,
+  early_stopping_round=earlyStoppingRound, 
+  verbose = 0
+)
+
+#Model
+os_model_xgb <- xgboost(
+  params = param, 
+  data = os_xgbtrain,
+  nrounds = xgb.nround,
+  maximize = TRUE,
+  early_stopping_round=earlyStoppingRound, 
+  verbose = 0 
+)
+
+#Predict
+X_test$predicted <- round(predict(object = os_model_xgb ,newdata = os_xgbtest),0)
+```
+
+```{r}
+#Metrics
+os_xgb_AUC <- auc(y_test, X_test$predicted)
+os_xgb_AUC
+
+
+os_CM <- confusionMatrix(factor(X_test$predicted),factor(y_test_oversampled))
+os_CM
+
+# Get the sensitivity value (True Positive Rate)
+os_sens <- os_CM$byClass["Sensitivity"]
+os_sens
+os_spec <- os_CM$byClass["Specificity"]
+os_spec
+
+# calculate the ROC scores
+os_roc_results_xgb <- roc(response = X_test$predicted, predictor = y_test_num)
+os_roc_results_xgb
+```
+
+```{r}
+# plot the ROC curve for each of the 3 Lr models
+plot(cv_lr_roc, col = "red", main = "Logistic Regression ROC Curve", xlab = "False Positive Rate (Specifity)", ylab = "True Positive Rate (Sensitivity)", print.auc = FALSE, auc.polygon = TRUE, auc.polygon.col = "lightgray")
+lines(roc_results_lr, col = "blue", print.auc = FALSE, auc.polygon = TRUE, auc.polygon.col = "lightgray")
+lines(roc_results_lr_3, col = "green", print.auc = FALSE, auc.polygon = TRUE, auc.polygon.col = "lightgray")
+
+
+# Add a legend
+legend("bottomright", legend = c("Log Reg w/ CV", "Log Reg w/ Oversampler" , "Log Reg w/ Random Split"), col = c("red", "blue", "green"), lty = 1)
+```
+
+```{r}
+# plot the ROC curve for each of the 3 XBoost models
+plot(cv_roc_results_xgb, col = "red", main = "Logistic Regression ROC Curve", xlab = "False Positive Rate (Specifity)", ylab = "True Positive Rate (Sensitivity)", print.auc = FALSE, auc.polygon = TRUE, auc.polygon.col = "lightgray")
+lines(rs_roc_results_xgb, col = "blue", print.auc = FALSE, auc.polygon = TRUE, auc.polygon.col = "lightgray")
+lines(os_roc_results_xgb, col = "green", print.auc = FALSE, auc.polygon = TRUE, auc.polygon.col = "lightgray")
+legend("bottomright", legend = c("CV XGB", "RS XGB", "OS XGB"), col = c("red", "blue", "green"), lty = 1, lwd = 2)
+```
+
+```{r}
+lr_1 <- varImp(log_reg_fit, scale = FALSE)
+lr_2 <- varImp(log_reg_fit_2, scale = FALSE)
+lr_3 <- varImp(log_reg_fit_3, scale = FALSE)
+plot(lr_1)
+plot(lr_2)
+plot(lr_3)
+```
+
+```{r}
+calculate_metrics <- function(model, train_data, train_labels, test_data, test_labels) {
+  # Train set predictions
+  train_predictions <- predict(model, newdata = train_data)
+  
+  # Test set predictions
+  test_predictions <- predict(model, newdata = test_data)
+  
+  # Train set metrics
+  train_accuracy <- mean(train_predictions == train_labels)
+  train_sensitivity <- sum(train_predictions[train_labels == "B"] == "B") / sum(train_labels == "B")
+  train_specificity <- sum(train_predictions[train_labels == "M"] == "M") / sum(train_labels == "M")
+  
+  # Test set metrics
+  test_accuracy <- mean(test_predictions == test_labels)
+  test_sensitivity <- sum(test_predictions[test_labels == "B"] == "B") / sum(test_labels == "B")
+  test_specificity <- sum(test_predictions[test_labels == "M"] == "M") / sum(test_labels == "M")
+  
+  # Return the metrics as a named list
+  metrics <- list(
+    train_accuracy = train_accuracy,
+    train_sensitivity = train_sensitivity,
+    train_specificity = train_specificity,
+    test_accuracy = test_accuracy,
+    test_sensitivity = test_sensitivity,
+    test_specificity = test_specificity
+  )
+  
+  return(metrics)
+}
+
+# Use function to get metrics for training and testing set of 70/30 oversampled
+metrics <- calculate_metrics(log_reg_fit_2, X_train_oversampled, y_train_oversampled, X_test_oversampled, y_test_oversampled)
+
+# Extracts the metrics from the metrics list
+train_accuracy_2 <- metrics$train_accuracy
+train_sensitivity_2 <- metrics$train_sensitivity
+train_specificity_2 <- metrics$train_specificity
+test_accuracy_2 <- metrics$test_accuracy
+test_sensitivity_2 <- metrics$test_sensitivity
+test_specificity_2 <- metrics$test_specificity
+```
+
+```{r}
+print("Oversampled with 70/30 Split")
+cat("Training Accuracy", train_accuracy_2)
+print("")
+cat("Testing Accuracy", test_accuracy_2)
+print("")
+cat("Train Sensitivity", train_sensitivity_2)
+print("")
+cat("Test Sensitivity", test_sensitivity_2)
+print("")
+cat("Train Specifity", train_specificity_2)
+print("")
+cat("Test Specifity", test_specificity_2)
+```
+
+```{r}
+# Use function to get metrics for training and testing set of 70/30 oversampled
+metrics_2 <- calculate_metrics(log_reg_fit_3, X_train, y_train, X_test, y_test)
+
+# Extracts the metrics from the metrics list
+train_accuracy_3 <- metrics$train_accuracy
+train_sensitivity_3 <- metrics$train_sensitivity
+train_specificity_3 <- metrics$train_specificity
+test_accuracy_3 <- metrics$test_accuracy
+test_sensitivity_3 <- metrics$test_sensitivity
+test_specificity_3 <- metrics$test_specificity
+
+print("Oversampled with 70/30 Split")
+cat("Training Accuracy", train_accuracy_3)
+print("")
+cat("Testing Accuracy", test_accuracy_3)
+print("")
+cat("Train Sensitivity", train_sensitivity_3)
+print("")
+cat("Test Sensitivity", test_sensitivity_3)
+print("")
+cat("Train Specifity", train_specificity_3)
+print("")
+cat("Test Specifity", test_specificity_3)
+```
