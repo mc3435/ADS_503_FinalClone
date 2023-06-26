@@ -179,6 +179,46 @@ eigen_plot <- ggplot(eigen_table, aes(x = reorder(Variable, Eigenvalue), y = Eig
 eigen_plot
 
 ```
+```{r}
+### Principal Components Analysis (PCA) transform
+var_only <- df_clean[, !(names(df_clean) %in% c("diagnosis"))] # predictor variables only
+diagnosis <- raw.data[, 2] # target variable only 
+var_pca <- prcomp(var_only, center = TRUE, scale. = TRUE)
+fviz_eig(var_pca, addlabels = TRUE, ylim = c(0, 50),
+         title = "Principal Components Analysis (PCA)",
+         subtitle = NULL,
+         xlab = "Principal Component",
+         ylab = "Proportion of Variance Explained",
+         geom = "line",
+         linecolor = "red",
+         pointsize = 2,
+         pointshape = 21,
+         pointfill = "white",
+         pointcolor = "red",
+         legend.title = "Principal Components",
+         legend.position = "right")
+# Adjust plot margins
+par(mar = c(5, 5, 4, 2) + 0.1)
+```
+```{r}
+# Create PCA biplot with customized aesthetics
+pca_biplot <- fviz_pca_biplot(var_pca,
+                          geom.ind = "point",
+                          col.ind = diagnosis,
+                          palette = c("blue", "red"),
+                          addEllipses = TRUE,
+                          axes.linetype = "dashed",
+                          title = "Principal Components Analysis (PCA)",
+                          xlab = "PC1 (Proportion of Variance Explained)",
+                          ylab = "PC2 (Proportion of Variance Explained)",
+                          legend.title = "Diagnosis",
+                          legend.position = "right",
+                          legend.shape = "circle",
+                          legend.label = c("Benign", "Malignant"))
+pca_biplot
+
+```
+
 
 
 #### df_var data frame for visualizing just predictors
