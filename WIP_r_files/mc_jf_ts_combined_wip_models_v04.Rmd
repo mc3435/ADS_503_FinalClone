@@ -115,16 +115,12 @@ ggpairs(df_worst, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smoot
 
 ```{r}
 
-### Analyze the Feature Density & Correlation between variables
-# Visualization for the "Mean" Variables
-ggpairs(df_mean, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
-  labs(title="Feature Density & Correlation - Cancer Means")+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=20))
-# Visualization for the "Standard Error" Variables
-ggpairs(df_se, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
-  labs(title="Feature Density & Correlation - Cancer Standard Error")+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=20))
-# Visualization for the "Worst" Variables
-ggpairs(df_worst, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
-  labs(title="Feature Density & Correlation - Cancer Worst (Mean of the three largest values)")+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=20))
+# Pearson Correlation of all features
+df_clean$diagnosis <- as.integer(factor(df_clean$diagnosis))-1
+correlations <- cor(df_clean,method="pearson")
+corrplot(correlations, number.cex = .9, method = "square", 
+         hclust.method = "ward", order = "FPC",
+         type = "full", tl.cex=0.8,tl.col = "black")
 
 
 ```
