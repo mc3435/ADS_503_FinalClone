@@ -1089,6 +1089,7 @@ RANDOM FOREST MODELING
 library(randomForest)
 library(caret)
 library(pROC)
+library(gridExtra)
 
 set.seed(0)
 
@@ -1122,12 +1123,14 @@ rf_fit_oversampling <- train(
 # Evaluate Model 1
 predictions_rf_1 <- predict(rf_fit_oversampling, newdata = X_test_rf)
 confusion_matrix_1 <- confusionMatrix(data = predictions_rf_1, reference = y_test_rf)
+precision_1 <- confusion_matrix_1$byClass["Pos Pred Value"]
 f1_score_1 <- confusion_matrix_1$byClass["F1"]
 auc_roc_1 <- roc(predictions_rf_1, as.numeric(y_test_rf))$auc
 
 # Print results for Model 1
 print("Model 1: Random Forest with Random Oversampling")
 print(confusion_matrix_1)
+print(paste("Precision:", precision_1))
 print(paste("F1-score:", f1_score_1))
 print(paste("AUC/ROC:", auc_roc_1))
 
@@ -1167,6 +1170,7 @@ auc_roc_2 <- roc(test_data$diagnosis, predicted_probs_M)$auc
 # Print results for Model 2
 print("Model 3: Random Forest with K-fold cross-validation")
 print(confusion_matrix_2)
+print(paste("Precision:", precision_2))
 print(paste("F1-score:", f1_score_2))
 print(paste("AUC/ROC:", auc_roc_2))
 
@@ -1202,15 +1206,65 @@ rf_model <- train(
 # Evaluate Model 3
 predictions_rf_3 <- predict(rf_model, newdata = X_test_rf)
 confusion_matrix_3 <- confusionMatrix(data = predictions_rf_3, reference = y_test_rf)
+precision_3 <- confusion_matrix_3$byClass["Pos Pred Value"]
 f1_score_3 <- confusion_matrix_3$byClass["F1"]
 auc_roc_3 <- roc(predictions_rf_3, as.numeric(y_test_rf))$auc
 
 # Print results for Model 3
 print("Model 3: Random Forest with K-fold cross-validation")
 print(confusion_matrix_3)
+print(paste("Precision:", precision_3))
 print(paste("F1-score:", f1_score_3))
 print(paste("AUC/ROC:", auc_roc_3))
 
 
 ```
+
+```{r}
+# Convert the confusion matrices to data frames
+df1 <- as.data.frame(as.table(confusion_matrix_1$table))
+df2 <- as.data.frame(as.table(confusion_matrix_2$table))
+df3 <- as.data.frame(as.table(confusion_matrix_3$table))
+
+# Generate the plots
+plot1 <- ggplot(data = df1, aes(x = Reference, y = Prediction)) +
+         geom_tile(aes(fill = Freq)) +
+         geom_text(aes(label = Freq), color = "black") +
+         theme_minimal() +
+         labs(title = "Model 1: RF with Random Oversampling")
+print(plot1)
+
+plot2 <- ggplot(data = df2, aes(x = Reference, y = Prediction)) +
+         geom_tile(aes(fill = Freq)) +
+         geom_text(aes(label = Freq), color = "black") +
+         theme_minimal() +
+         labs(title = "Model 2: RF with 70/30 split")
+print(plot2)
+
+plot3 <- ggplot(data = df3, aes(x = Reference, y = Prediction)) +
+         geom_tile(aes(fill = Freq)) +
+         geom_text(aes(label = Freq), color = "black") +
+         theme_minimal() +
+         labs(title = "Model 3: RF with K-fold cross-validation")
+print(plot3)
+```
+```{r}
+# Get the predicted probabilities for each model
+probs_rf_1 <- predict(rf_fit_oversampling, newdata = X_test_rf, type="prob")[, "M"]
+probs_rf_2 <- predicted_probs_M  # You already calculated this
+probs_rf_3 <- predict(rf_model, newdata = X_test_rf, type="prob")[, "M"]
+
+# Generate the ROC curves for each model
+roc_obj_rf_1 <- roc(y_test_rf, probs_rf_1)
+roc_obj_rf_2 <- roc(test_data$diagnosis, probs_rf_2)
+roc_obj_rf_3 <- roc(y_test_rf, probs_rf_3)
+
+# Plot the ROC curves
+plot(roc_obj_rf_1, col="blue", lwd=2, main="ROC Curves for Random Forest Models", legacy.axes=TRUE)
+lines(roc_obj_rf_2, col="red", lwd=2)
+lines(roc_obj_rf_3, col="green", lwd=2)
+legend("bottomright", legend=c("RF with Random Oversampling", "RF with 70/30 split", "RF with K-fold CV"), 
+       col=c("blue", "red", "green"), lwd=2)
+```
+
 
