@@ -1126,6 +1126,8 @@ confusion_matrix_1 <- confusionMatrix(data = predictions_rf_1, reference = y_tes
 precision_1 <- confusion_matrix_1$byClass["Pos Pred Value"]
 f1_score_1 <- confusion_matrix_1$byClass["F1"]
 auc_roc_1 <- roc(predictions_rf_1, as.numeric(y_test_rf))$auc
+sensitivity_1 <- confusion_matrix_1$byClass["Sensitivity"]
+specificity_1 <- confusion_matrix_1$byClass["Specificity"]
 
 # Print results for Model 1
 print("Model 1: Random Forest with Random Oversampling")
@@ -1159,6 +1161,8 @@ confusion_matrix_2 <- confusionMatrix(data = test_data$predicted_split, referenc
 precision_2 <- confusion_matrix_2$byClass["Pos Pred Value"]
 recall_2 <- confusion_matrix_2$byClass["Sensitivity"]
 f1_score_2 <- 2 * (precision_2 * recall_2) / (precision_2 + recall_2)
+sensitivity_2 <- confusion_matrix_2$byClass["Sensitivity"]
+specificity_2 <- confusion_matrix_2$byClass["Specificity"]
 
 # Extract predicted probabilities for the positive class ("M")
 predicted_probs <- predict(rf_model_split, newdata = test_data[, -which(names(test_data) == "diagnosis")], type = "prob")
@@ -1209,7 +1213,8 @@ confusion_matrix_3 <- confusionMatrix(data = predictions_rf_3, reference = y_tes
 precision_3 <- confusion_matrix_3$byClass["Pos Pred Value"]
 f1_score_3 <- confusion_matrix_3$byClass["F1"]
 auc_roc_3 <- roc(predictions_rf_3, as.numeric(y_test_rf))$auc
-
+sensitivity_3 <- confusion_matrix_3$byClass["Sensitivity"]
+specificity_3 <- confusion_matrix_3$byClass["Specificity"]
 # Print results for Model 3
 print("Model 3: Random Forest with K-fold cross-validation")
 print(confusion_matrix_3)
@@ -1267,4 +1272,54 @@ legend("bottomright", legend=c("RF with Random Oversampling", "RF with 70/30 spl
        col=c("blue", "red", "green"), lwd=2)
 ```
 
+```{r}
+# Construct a data frame
+performance_df <- data.frame(
+  model = c("RF with Random Oversampling", "RF with 70/30 split", "RF with K-fold CV"),
+  accuracy = c(confusion_matrix_1$overall["Accuracy"], confusion_matrix_2$overall["Accuracy"], confusion_matrix_3$overall["Accuracy"]),
+  precision = c(precision_1, precision_2, precision_3),
+  sensitivity = c(sensitivity_1, sensitivity_2, sensitivity_3),
+  specificity = c(specificity_1, specificity_2, specificity_3),
+  f1_score = c(f1_score_1, f1_score_2, f1_score_3),
+  auc = c(auc_roc_1, auc_roc_2, auc_roc_3)
+)
+
+# Melt the data frame to long format for plotting
+library(reshape2)
+performance_melted_df <- melt(performance_df, id.vars = "model")
+
+# Plot the metrics
+library(ggplot2)
+ggplot(performance_melted_df, aes(x = model, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(value, 2)), position = position_dodge(width = 0.9), vjust = -0.25, angle = 45) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(y = "Score", x = "Model", fill = "Metric") +
+  ggtitle("Model Performance Comparison") +
+  ylim(0, max(performance_melted_df$value) + 0.1)
+
+
+```
+
+```{r}
+# Construct a data frame
+performance_df <- data.frame(
+  model = c(rep("RF with Random Oversampling", 6), rep("RF with 70/30 split", 6), rep("RF with K-fold CV", 6)),
+  metric = c(rep(c("accuracy", "precision", "sensitivity", "specificity", "f1_score", "auc"), 3)),
+  score = c(confusion_matrix_1$overall["Accuracy"], precision_1, sensitivity_1, specificity_1, f1_score_1, auc_roc_1,
+            confusion_matrix_2$overall["Accuracy"], precision_2, sensitivity_2, specificity_2, f1_score_2, auc_roc_2,
+            confusion_matrix_3$overall["Accuracy"], precision_3, sensitivity_3, specificity_3, f1_score_3, auc_roc_3)
+)
+
+# Plot the metrics
+ggplot(performance_df, aes(x = metric, y = score, fill = model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(score, 2)), position = position_dodge(width = 0.9), vjust = -0.25, angle = 45, hjust = 0.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(y = "Score", x = "Metric", fill = "Model") +
+  ggtitle("Model Performance Comparison") +
+  ylim(0, max(performance_df$score) + 0.1)
+
+
+```
 
