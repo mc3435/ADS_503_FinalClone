@@ -493,34 +493,7 @@ skewness_df <- data.frame(Skewness = unlist(skewness_list))
 print(skewness_df)
 ```
 
-#### Rough PCA for kmeans - Replace w !!!!Trevors!!!!!
 
-```{r}
-options(scipen = 999)
-
-# Convert the dataframe to a matrix
-df_pca <- as.matrix(df_var)
-
-# Perform PCA
-df.pca <- prcomp(df_pca, center = TRUE, scale. = TRUE)
-
-# Calculate percentage variance explained
-var_explained <- round(df.pca$sdev^2 / sum(df.pca$sdev^2) * 100, 4)
-
-# Plot Scree Plot
-library(factoextra)
-library(ggplot2)
-
-fviz_eig(df.pca,
-         main = "Scree Plot of Principal Components",
-         xlab = "Principal Components",
-         ylab = "Percent Variance Explained",
-         barcolor = "grey", barfill = "grey",
-         linecolor = "blue", addlabels = TRUE,
-         ggtheme = theme_classic())
-
-
-```
 
 2 or 3 principal components. revisit & decide later.
 
