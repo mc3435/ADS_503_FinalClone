@@ -8,6 +8,8 @@ library(factoextra)
 library(e1071)
 library(pROC)
 library(xgboost)
+library(stringr)
+
 df <- read.csv("C:/MIDS/ADS-503_Applied_Predictive_Modeling/ADS_503_team_2_final_project/data/breast_cancer_FNA_data.csv")
 # remove the x and Id from the end of the data set since it is all null values
 # "x" column is an error from csv column spacing, and can be removed entirely. 
@@ -369,6 +371,53 @@ ggplot(plot_data_5, aes(x = diagnosis, y = value, fill = diagnosis)) +
   ylab("Value") +
   theme(legend.position = "top")
 ```
+
+```{r}
+# Create a function to generate boxplots
+generate_boxplot <- function(data, features, variable_type) {
+  plot_data <- data.frame(
+    value = unlist(data),
+    diagnosis = rep(df_clean$diagnosis, each = length(features)),
+    feature = rep(features, each = nrow(data))
+  )
+  
+  # Remove _mean, _se, or _worst from variable names
+  plot_data$feature <- str_replace_all(plot_data$feature, "_mean", "")
+  plot_data$feature <- str_replace_all(plot_data$feature, "_se", "")
+  plot_data$feature <- str_replace_all(plot_data$feature, "_worst", "")
+  
+  plot_data$feature <- str_wrap(plot_data$feature, width = 15)  # Adjust the width as needed
+  
+  ggplot(plot_data, aes(x = diagnosis, y = value, fill = factor(diagnosis))) +
+    geom_boxplot() +
+    facet_wrap(~ feature, scales = "free_y", nrow = 1) +
+    scale_fill_manual(values = colors, labels = c('Benign', 'Malignant')) +
+    xlab("Diagnosis") +
+    ylab("Value") +
+    ggtitle(variable_type) +  # Add the variable type as the plot title
+    theme(legend.position = "top") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    theme(axis.text.y = element_text(size = 8)) +
+    theme(strip.text = element_text(size = 8))
+}
+
+# Define the sets of features
+features_mean <- grep("_mean$", names(df_clean), value = TRUE)
+features_se <- grep("_se$", names(df_clean), value = TRUE)
+features_worst <- grep("_worst$", names(df_clean), value = TRUE)
+
+# Generate boxplots for each set of features
+boxplot_mean <- generate_boxplot(df_clean[, features_mean], features_mean, "Mean")
+boxplot_se <- generate_boxplot(df_clean[, features_se], features_se, "SE (Standard Error)")
+boxplot_worst <- generate_boxplot(df_clean[, features_worst], features_worst, "Worst")
+
+# Display the boxplots
+boxplot_mean
+boxplot_se
+boxplot_worst
+
+```
+
 
 #### Skew
 
