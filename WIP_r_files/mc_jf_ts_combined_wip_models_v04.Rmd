@@ -125,6 +125,7 @@ corrplot(correlations, number.cex = .9, method = "square",
 ```
 ```{r}
 # Calculate the VIF values (using linear model) for the predictor variables to look for multicollinearity
+# VIF below 5 are generally considered acceptable, 5-10 suggest moderate multicollinearity, and above 10 show high multicollinearity
 lm_model <- lm(diagnosis ~ ., data = df_clean)
 vif_values <- vif(lm_model)
 vif_table <- data.frame(Variable = names(vif_values), VIF = vif_values)
@@ -140,9 +141,34 @@ vif_plot <- ggplot(vif_table, aes(x = reorder(Variable, VIF), y = VIF)) +
   ylim(0, y_axis_limit)  # Set the y-axis limits
 print(vif_plot)
 ```
+```{r}
+### Calculate the tolerance (reciprocal of VIF) for the predictor variables to look for multicollinearity 
+tolerance <- 1 / vif_values
+tolerance_table <- data.frame(Variable = names(tolerance), Tolerance = tolerance)
+tolerance_table <- tolerance_table[order(tolerance_table$Tolerance), ]
+tolerance_plot <- ggplot(tolerance_table, aes(x = reorder(Variable, Tolerance), y = Tolerance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(x = "Variable", y = "Tolerance") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Tolerance Values of Predictor Variables (Ascending Order)")
+tolerance_plot
+```
+
 
 ```{r}
-
+### Calculate the eigenvalues for the predictor variables to look for multicollinearity 
+# Small eigenvalues suggest potential multicollinearity issues
+correlations <- cor(df_clean[-1], method = "pearson")
+eigenvalues <- eigen(correlations)$values
+eigen_table <- data.frame(Variable = colnames(correlations), Eigenvalue = eigenvalues)
+eigen_table <- eigen_table[eigen_table$Variable != "diagnosis", ]
+eigen_table <- eigen_table[order(eigen_table$Eigenvalue), ]
+eigen_plot <- ggplot(eigen_table, aes(x = reorder(Variable, Eigenvalue), y = Eigenvalue)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(x = "Variable", y = "Eigenvalue") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Eigenvalues of Variables (Ascending Order)")
+eigen_plot
 ```
 
 
