@@ -53,6 +53,10 @@ library(corrplot)
 library(relaimpo)
 library(factoextra)
 library(Rtsne)
+library(xgboost)
+library(ROSE)
+
+install.packages("ROSE")
 
 # Load the CSV file into a dataframe & assess the data
 raw.data <- read.csv('C:/MIDS/ADS-503_Applied_Predictive_Modeling/ADS_503_team_2_final_project/data/breast_cancer_FNA_data.csv')
@@ -227,13 +231,78 @@ var_importance <- importance(rf_model)
 var_names <- row.names(var_importance)  
 var_importance <- data.frame(Variable = var_names, Importance = var_importance[, "MeanDecreaseGini"])
 
-# Rearrange the rows in ascending order of importance
+# Sort the mean decrease Gini values in ascending order
 var_importance <- var_importance[order(var_importance$Importance), ]
-
-importance_plot <- ggplot(var_importance, aes(x = Variable, y = Importance)) +
+importance_plot <- ggplot(var_importance, aes(x = reorder(Variable, Importance), y = Importance)) +
   geom_bar(stat = "identity", fill = "steelblue") +
   labs(x = "Variable", y = "Mean Decrease Gini") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   ggtitle("Random Forest - Feature Importance (Ascending Order)")
-
 print(importance_plot)
+
+# Prepare the data for random forest
+df_rf <- df_clean
+df_rf$diagnosis <- as.factor(df_rf$diagnosis)
+
+# Split the data into training and testing sets
+set.seed(42)  # For reproducibility
+train_indices <- sample(1:nrow(df_rf), 0.7 * nrow(df_rf))  # 70% for training
+train_data <- df_rf[train_indices, ]
+test_data <- df_rf[-train_indices, ]
+
+# Train a random forest model with optimized parameters
+rf_model <- randomForest(
+  diagnosis ~ .,
+  data = train_data,
+  ntree = 2000,  # Increase the number of trees for better performance
+  mtry = sqrt(ncol(train_data) - 1),  # Optimal number of features to consider
+  importance = TRUE
+)
+
+# Predict on the test set
+predicted <- predict(rf_model, newdata = test_data)
+
+# Create a confusion matrix
+confusion_matrix <- table(Actual = test_data$diagnosis, Predicted = predicted)
+print(confusion_matrix)
+
+# Calculate performance metrics
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- confusion_matrix[2, 2] / sum(confusion_matrix[, 2])
+recall <- confusion_matrix[2, 2] / sum(confusion_matrix[2, ])
+f1_score <- 2 * (precision * recall) / (precision + recall)
+sensitivity <- recall
+specificity <- confusion_matrix[1, 1] / sum(confusion_matrix[1, ])
+
+# Convert predicted factor levels to numeric values
+predicted <- as.numeric(predicted) - 1
+
+# Calculate AUC using roc() from pROC package
+auc <- roc(as.numeric(test_data$diagnosis) - 1, predicted)$auc
+
+# Print performance metrics
+cat("Accuracy:", accuracy, "\n")
+cat("Precision:", precision, "\n")
+cat("Recall:", recall, "\n")
+cat("F1-score:", f1_score, "\n")
+cat("Sensitivity:", sensitivity, "\n")
+cat("Specificity:", specificity, "\n")
+cat("AUC:", auc, "\n")
+
+# Plot feature importance
+var_importance <- importance(rf_model)
+var_names <- row.names(var_importance)
+var_importance <- data.frame(Variable = var_names, Importance = var_importance[, "MeanDecreaseGini"])
+
+# Sort the mean decrease Gini values in ascending order
+var_importance <- var_importance[order(var_importance$Importance), ]
+importance_plot <- ggplot(var_importance, aes(x = reorder(Variable, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(x = "Variable", y = "Mean Decrease Gini") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Random Forest - Feature Importance (Ascending Order)")
+print(importance_plot)
+
+# Plot ROC curve
+roc_curve <- roc(as.numeric(test_data$diagnosis) - 1, predicted)
+plot(roc_curve, col = "steelblue", main = "Random Forest - ROC Curve")
