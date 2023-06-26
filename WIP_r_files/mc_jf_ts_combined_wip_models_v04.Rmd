@@ -219,6 +219,18 @@ pca_biplot
 
 ```
 
+```{r}
+### t-SNE transform for dimensionality reduction
+colors <- c("red", "blue")
+names(colors) = unique(diagnosis)
+set.seed(0)
+tsne <- Rtsne(var_only, dims=2, perplexity=30, 
+              verbose=TRUE, pca=TRUE, 
+              theta=0.01, max_iter=1000)
+plot(tsne$Y, t='n', main="t-Distributed Stochastic Neighbor Embedding (t-SNE)",
+     xlab="t-SNE 1st dimm.", ylab="t-SNE 2nd dimm.")
+text(tsne$Y, labels=diagnosis, cex=0.5, col=colors[diagnosis])
+```
 
 
 #### df_var data frame for visualizing just predictors
