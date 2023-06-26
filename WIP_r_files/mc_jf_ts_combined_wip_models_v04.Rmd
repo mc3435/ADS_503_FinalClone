@@ -122,9 +122,28 @@ corrplot(correlations, number.cex = .9, method = "square",
          hclust.method = "ward", order = "FPC",
          type = "full", tl.cex=0.8,tl.col = "black")
 
-
+```
+```{r}
+# Calculate the VIF values (using linear model) for the predictor variables to look for multicollinearity
+lm_model <- lm(diagnosis ~ ., data = df_clean)
+vif_values <- vif(lm_model)
+vif_table <- data.frame(Variable = names(vif_values), VIF = vif_values)
+vif_table <- vif_table[order(vif_table$VIF), ]
+vif_table$VIF <- round(vif_table$VIF)
+y_axis_limit <- 4000
+vif_plot <- ggplot(vif_table, aes(x = reorder(Variable, VIF), y = VIF)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = VIF), vjust = -0.5) +  # Add integer value labels
+  labs(x = "Variable", y = "Variance Inflation Factor (VIF)") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("VIF Values of Predictor Variables (Ascending Order)") +
+  ylim(0, y_axis_limit)  # Set the y-axis limits
+print(vif_plot)
 ```
 
+```{r}
+
+```
 
 
 #### df_var data frame for visualizing just predictors
