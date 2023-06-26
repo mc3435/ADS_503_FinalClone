@@ -114,14 +114,12 @@ ggpairs(df_worst, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smoot
 ```
 
 ```{r}
-
 # Pearson Correlation of all features
 df_clean$diagnosis <- as.integer(factor(df_clean$diagnosis))-1
 correlations <- cor(df_clean,method="pearson")
 corrplot(correlations, number.cex = .9, method = "square", 
          hclust.method = "ward", order = "FPC",
-         type = "full", tl.cex=0.8,tl.col = "black")
-
+         type = "full", tl.cex=0.7,tl.col = "black")
 ```
 ```{r}
 # Calculate the VIF values (using linear model) for the predictor variables to look for multicollinearity
@@ -136,21 +134,26 @@ vif_plot <- ggplot(vif_table, aes(x = reorder(Variable, VIF), y = VIF)) +
   geom_bar(stat = "identity", fill = "steelblue") +
   geom_text(aes(label = VIF), vjust = -0.5) +  # Add integer value labels
   labs(x = "Variable", y = "Variance Inflation Factor (VIF)") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   ggtitle("VIF Values of Predictor Variables (Ascending Order)") +
   ylim(0, y_axis_limit)  # Set the y-axis limits
 print(vif_plot)
 ```
 ```{r}
 ### Calculate the tolerance (reciprocal of VIF) for the predictor variables to look for multicollinearity 
+# Generally, a tolerance value less than 0.1 or 0.2 is often considered indicative of multicollinearity.
 tolerance <- 1 / vif_values
 tolerance_table <- data.frame(Variable = names(tolerance), Tolerance = tolerance)
 tolerance_table <- tolerance_table[order(tolerance_table$Tolerance), ]
+tolerance_table$Tolerance <- round(tolerance_table$Tolerance, 2)
+y_axis_limit <- 0.27
 tolerance_plot <- ggplot(tolerance_table, aes(x = reorder(Variable, Tolerance), y = Tolerance)) +
   geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = Tolerance), vjust = -0.5, hjust = 0.5, color = "black", size = 3) +  # Add value labels
   labs(x = "Variable", y = "Tolerance") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  ggtitle("Tolerance Values of Predictor Variables (Ascending Order)")
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Tolerance Values of Predictor Variables (Ascending Order)") +
+  ylim(0, y_axis_limit)  # Set the y-axis limits
 tolerance_plot
 ```
 
@@ -170,7 +173,7 @@ eigen_plot <- ggplot(eigen_table, aes(x = reorder(Variable, Eigenvalue), y = Eig
   geom_bar(stat = "identity", fill = "steelblue") +
   geom_text(aes(label = Eigenvalue), vjust = -0.5, hjust = 0.5, color = "black", size = 3) +  # Add value labels
   labs(x = "Variable", y = "Eigenvalue") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   ggtitle("Eigenvalues of Variables (Ascending Order)") +
   ylim(0, y_axis_limit)  # Set the y-axis limits
 eigen_plot
