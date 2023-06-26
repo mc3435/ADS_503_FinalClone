@@ -217,28 +217,7 @@ pca_biplot <- fviz_pca_biplot(var_pca,
                           legend.label = c("Benign", "Malignant"))
 pca_biplot
 
-### Feature Importance
-
-# Prepare the data for random forest
-df_rf <- df_clean
-df_rf$diagnosis <- as.factor(df_rf$diagnosis)
-
-# Train a random forest model
-rf_model <- randomForest(diagnosis ~ ., data = df_rf, ntree = 500, importance = TRUE)
-
-# Plot feature importance
-var_importance <- importance(rf_model)
-var_names <- row.names(var_importance)  
-var_importance <- data.frame(Variable = var_names, Importance = var_importance[, "MeanDecreaseGini"])
-
-# Sort the mean decrease Gini values in ascending order
-var_importance <- var_importance[order(var_importance$Importance), ]
-importance_plot <- ggplot(var_importance, aes(x = reorder(Variable, Importance), y = Importance)) +
-  geom_bar(stat = "identity", fill = "steelblue") +
-  labs(x = "Variable", y = "Mean Decrease Gini") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  ggtitle("Random Forest - Feature Importance (Ascending Order)")
-print(importance_plot)
+### Random Forest Modeling, Feature Importance, Tuning, and Performance Metrics
 
 # Prepare the data for random forest
 df_rf <- df_clean
@@ -250,59 +229,203 @@ train_indices <- sample(1:nrow(df_rf), 0.7 * nrow(df_rf))  # 70% for training
 train_data <- df_rf[train_indices, ]
 test_data <- df_rf[-train_indices, ]
 
-# Train a random forest model with optimized parameters
-rf_model <- randomForest(
+### Original Model ###
+# Train a random forest model with original parameters
+rf_model_original <- randomForest(
   diagnosis ~ .,
   data = train_data,
-  ntree = 2000,  # Increase the number of trees for better performance
-  mtry = sqrt(ncol(train_data) - 1),  # Optimal number of features to consider
+  ntree = 500,
   importance = TRUE
 )
 
-# Predict on the test set
-predicted <- predict(rf_model, newdata = test_data)
+# Predict on the test set with original model
+predicted_original <- predict(rf_model_original, newdata = test_data)
 
-# Create a confusion matrix
-confusion_matrix <- table(Actual = test_data$diagnosis, Predicted = predicted)
-print(confusion_matrix)
+# Convert factor to numeric for AUC calculation
+predicted_numeric <- as.numeric(predicted_original) - 1
 
-# Calculate performance metrics
-accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
-precision <- confusion_matrix[2, 2] / sum(confusion_matrix[, 2])
-recall <- confusion_matrix[2, 2] / sum(confusion_matrix[2, ])
-f1_score <- 2 * (precision * recall) / (precision + recall)
-sensitivity <- recall
-specificity <- confusion_matrix[1, 1] / sum(confusion_matrix[1, ])
+# Calculate performance metrics for original model
+confusion_matrix_original <- table(Actual = test_data$diagnosis, Predicted = predicted_original)
+accuracy_original <- sum(diag(confusion_matrix_original)) / sum(confusion_matrix_original)
+precision_original <- confusion_matrix_original[2, 2] / sum(confusion_matrix_original[, 2])
+recall_original <- confusion_matrix_original[2, 2] / sum(confusion_matrix_original[2, ])
+f1_score_original <- 2 * (precision_original * recall_original) / (precision_original + recall_original)
+specificity_original <- confusion_matrix_original[1, 1] / sum(confusion_matrix_original[1, ])
+sensitivity_original <- recall_original
+auc_original <- roc(test_data$diagnosis, predicted_numeric)$auc
 
-# Convert predicted factor levels to numeric values
-predicted <- as.numeric(predicted) - 1
+### Recursive Feature Elimination (RFE) Model ###
+# Perform recursive feature elimination
+ctrl_rfe <- rfeControl(functions = rfFuncs, method = "cv", number = 5)  # 5-fold cross-validation
+rfe_model <- rfe(
+  x = train_data[, -ncol(train_data)],  # Exclude the target variable
+  y = train_data$diagnosis,
+  sizes = c(5, 10, 15),  # Different feature subset sizes to consider
+  rfeControl = ctrl_rfe
+)
 
-# Calculate AUC using roc() from pROC package
-auc <- roc(as.numeric(test_data$diagnosis) - 1, predicted)$auc
+# Get the selected features from RFE
+selected_features <- predictors(rfe_model)
 
-# Print performance metrics
-cat("Accuracy:", accuracy, "\n")
-cat("Precision:", precision, "\n")
-cat("Recall:", recall, "\n")
-cat("F1-score:", f1_score, "\n")
-cat("Sensitivity:", sensitivity, "\n")
-cat("Specificity:", specificity, "\n")
-cat("AUC:", auc, "\n")
+# Train the model using the selected features from RFE
+rf_model_rfe <- randomForest(
+  diagnosis ~ .,
+  data = train_data[, c(selected_features, "diagnosis")],
+  ntree = 500,
+  importance = TRUE
+)
 
-# Plot feature importance
-var_importance <- importance(rf_model)
-var_names <- row.names(var_importance)
-var_importance <- data.frame(Variable = var_names, Importance = var_importance[, "MeanDecreaseGini"])
+# Predict on the test set with RFE model
+test_data_rfe <- test_data[, c(selected_features, "diagnosis")]
+predicted_rfe <- predict(rf_model_rfe, newdata = test_data_rfe)
 
-# Sort the mean decrease Gini values in ascending order
-var_importance <- var_importance[order(var_importance$Importance), ]
-importance_plot <- ggplot(var_importance, aes(x = reorder(Variable, Importance), y = Importance)) +
-  geom_bar(stat = "identity", fill = "steelblue") +
-  labs(x = "Variable", y = "Mean Decrease Gini") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  ggtitle("Random Forest - Feature Importance (Ascending Order)")
-print(importance_plot)
+# Calculate performance metrics for RFE model
+confusion_matrix_rfe <- table(Actual = test_data$diagnosis, Predicted = predicted_rfe)
+accuracy_rfe <- sum(diag(confusion_matrix_rfe)) / sum(confusion_matrix_rfe)
+precision_rfe <- confusion_matrix_rfe[2, 2] / sum(confusion_matrix_rfe[, 2])
+recall_rfe <- confusion_matrix_rfe[2, 2] / sum(confusion_matrix_rfe[2, ])
+f1_score_rfe <- 2 * (precision_rfe * recall_rfe) / (precision_rfe + recall_rfe)
 
-# Plot ROC curve
-roc_curve <- roc(as.numeric(test_data$diagnosis) - 1, predicted)
-plot(roc_curve, col = "steelblue", main = "Random Forest - ROC Curve")
+# Calculate specificity for RFE model
+specificity_rfe <- confusion_matrix_rfe[1, 1] / sum(confusion_matrix_rfe[1, ])
+
+# Calculate sensitivity for RFE model
+sensitivity_rfe <- recall_rfe
+
+predicted_rfe_numeric <- as.numeric(predicted_rfe) - 1
+auc_rfe <- roc(test_data$diagnosis, predicted_rfe_numeric)$auc
+
+### Tuned Model ###
+# Define parameter grid for tuning
+param_grid <- expand.grid(
+  mtry = c(2, 4, 6, 8)  # Different values for mtry
+)
+
+# Perform grid search with cross-validation
+ctrl_tune <- trainControl(method = "cv", number = 5)  # 5-fold cross-validation
+tuned_model <- train(
+  diagnosis ~ .,
+  data = train_data,
+  method = "rf",
+  trControl = ctrl_tune,
+  tuneGrid = param_grid
+)
+
+# Get the optimal parameter values from tuning
+best_mtry <- tuned_model$bestTune$mtry
+best_splitrule <- tuned_model$bestTune$splitrule
+
+# Train the model with the optimal parameters
+rf_model_tuned <- randomForest(
+  diagnosis ~ .,
+  data = train_data,
+  ntree = 500,
+  mtry = best_mtry,
+  splitrule = best_splitrule,
+  importance = TRUE
+)
+
+# Predict on the test set with tuned model
+predicted_tuned <- predict(rf_model_tuned, newdata = test_data)
+
+# Calculate performance metrics for tuned model
+confusion_matrix_tuned <- table(Actual = test_data$diagnosis, Predicted = predicted_tuned)
+accuracy_tuned <- sum(diag(confusion_matrix_tuned)) / sum(confusion_matrix_tuned)
+precision_tuned <- confusion_matrix_tuned[2, 2] / sum(confusion_matrix_tuned[, 2])
+recall_tuned <- confusion_matrix_tuned[2, 2] / sum(confusion_matrix_tuned[2, ])
+f1_score_tuned <- 2 * (precision_tuned * recall_tuned) / (precision_tuned + recall_tuned)
+specificity_tuned <- confusion_matrix_tuned[1, 1] / sum(confusion_matrix_tuned[1, ])
+sensitivity_tuned <- recall_tuned
+predicted_tuned_numeric <- as.numeric(predicted_tuned) - 1
+auc_tuned <- roc(test_data$diagnosis, predicted_tuned_numeric)$auc
+
+### Print Performance Metrics Comparison ###
+cat("Original Model:\n")
+cat("Accuracy:", accuracy_original, "\n")
+cat("Precision:", precision_original, "\n")
+cat("Recall:", recall_original, "\n")
+cat("F1-score:", f1_score_original, "\n")
+cat("Specificity:", specificity_original, "\n")
+cat("Sensitivity:", sensitivity_original, "\n")
+cat("AUC:", auc_original, "\n\n")
+
+cat("RFE Model:\n")
+cat("Accuracy:", accuracy_rfe, "\n")
+cat("Precision:", precision_rfe, "\n")
+cat("Recall:", recall_rfe, "\n")
+cat("F1-score:", f1_score_rfe, "\n")
+cat("Specificity:", specificity_rfe, "\n")
+cat("Sensitivity:", sensitivity_rfe, "\n")
+cat("AUC:", auc_rfe, "\n\n")
+
+cat("Tuned Model:\n")
+cat("Accuracy:", accuracy_tuned, "\n")
+cat("Precision:", precision_tuned, "\n")
+cat("Recall:", recall_tuned, "\n")
+cat("F1-score:", f1_score_tuned, "\n")
+cat("Specificity:", specificity_tuned, "\n")
+cat("Sensitivity:", sensitivity_tuned, "\n")
+cat("AUC:", auc_tuned, "\n\n")
+
+### Plot Differences in Performance Metrics ###
+performance_metrics <- data.frame(
+  Model = c("Original", "RFE", "Tuned"),
+  Accuracy = c(accuracy_original, accuracy_rfe, accuracy_tuned),
+  Precision = c(precision_original, precision_rfe, precision_tuned),
+  Recall = c(recall_original, recall_rfe, recall_tuned),
+  F1_score = c(f1_score_original, f1_score_rfe, f1_score_tuned),
+  Specificity = c(specificity_original, specificity_rfe, specificity_tuned),
+  Sensitivity = c(sensitivity_original, sensitivity_rfe, sensitivity_tuned),
+  AUC = c(auc_original, auc_rfe, auc_tuned)
+)
+
+# Reshape performance metrics dataframe to long format
+performance_metrics_long <- reshape2::melt(performance_metrics, id.vars = "Model")
+
+# Plot the bar chart for performance metrics
+plot_perf_metrics <- ggplot(performance_metrics_long, aes(x = variable, y = value, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(value, 2)),
+            position = position_dodge(width = 0.9),
+            vjust = -0.5,
+            color = "black",
+            size = 3.5) +
+  labs(x = "Metric", y = "Value", fill = "Model") +
+  ggtitle("Performance Metrics Comparison") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+### Plot MSE and MAE ###
+mse_mae <- data.frame(
+  Model = c("Original", "RFE", "Tuned"),
+  MSE = c(mse_original, mse_rfe, mse_tuned),
+  MAE = c(mae_original, mae_rfe, mae_tuned)
+)
+
+# Reshape MSE and MAE dataframe to long format
+mse_mae_long <- reshape2::melt(mse_mae, id.vars = "Model")
+
+# Plot the bar chart for MSE and MAE
+plot_mse_mae <- ggplot(mse_mae_long, aes(x = variable, y = value, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(value, 2)),
+            position = position_dodge(width = 0.9),
+            vjust = -0.5,
+            color = "black",
+            size = 3.5) +
+  labs(x = "Metric", y = "Value", fill = "Model") +
+  ggtitle("MSE and MAE Comparison") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Print the performance metrics comparison
+cat("Performance Metrics Comparison:\n")
+print(performance_metrics)
+
+# Print the MSE and MAE comparison
+cat("MSE and MAE Comparison:\n")
+print(mse_mae)
+
+# Display the plots
+print(plot_perf_metrics)
+print(plot_mse_mae)
