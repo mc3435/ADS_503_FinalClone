@@ -77,6 +77,9 @@ df_worst <- df[, worst_columns]
 
 ```{r}
 
+library(GGally)
+ggpairs(df_mean, aes(color = diagnosis, alpha = 0.75), lower = list(continuous = "smooth"))
+
 # Prepare the dataframe 
 df_clean <- df[, !(names(df) %in% c("X", "id"))]
 df_clean
@@ -117,6 +120,7 @@ ggpairs(df_worst, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smoot
 
 ```{r}
 # Pearson Correlation of all features
+library(corrplot)
 df_clean$diagnosis <- as.integer(factor(df_clean$diagnosis))-1
 correlations <- cor(df_clean,method="pearson")
 corrplot(correlations, number.cex = .9, method = "square", 
@@ -126,6 +130,7 @@ corrplot(correlations, number.cex = .9, method = "square",
 ```{r}
 # Calculate the VIF values (using linear model) for the predictor variables to look for multicollinearity
 # VIF below 5 are generally considered acceptable, 5-10 suggest moderate multicollinearity, and above 10 show high multicollinearity
+library(car)
 lm_model <- lm(diagnosis ~ ., data = df_clean)
 vif_values <- vif(lm_model)
 vif_table <- data.frame(Variable = names(vif_values), VIF = vif_values)
@@ -183,6 +188,7 @@ eigen_plot
 ```
 ```{r}
 ### Principal Components Analysis (PCA) transform
+raw.data <- read.csv('C:/MIDS/ADS-503_Applied_Predictive_Modeling/ADS_503_team_2_final_project/data/breast_cancer_FNA_data.csv')
 var_only <- df_clean[, !(names(df_clean) %in% c("diagnosis"))] # predictor variables only
 diagnosis <- raw.data[, 2] # target variable only 
 var_pca <- prcomp(var_only, center = TRUE, scale. = TRUE)
@@ -223,6 +229,7 @@ pca_biplot
 
 ```{r}
 ### t-SNE transform for dimensionality reduction
+library(Rtsne)
 colors <- c("red", "blue")
 names(colors) = unique(diagnosis)
 set.seed(0)
@@ -616,7 +623,6 @@ crtl_df <- trainControl(method = 'cv',
 # 1st will be LR cross validation
 pen_grid <-  expand.grid(alpha = c(0, .4, .8, 1),
                         lambda = seq(.01, .2, length = 10))
-
 
 set.seed(100)
 log_reg_fit <- train(df_predict_lr,
@@ -1076,3 +1082,135 @@ cat("Train Specifity", train_specificity_3)
 print("")
 cat("Test Specifity", test_specificity_3)
 ```
+RANDOM FOREST MODELING
+
+```{r}
+
+library(randomForest)
+library(caret)
+library(pROC)
+
+set.seed(0)
+
+# Load the data
+df <- read.csv("C:/MIDS/ADS-503_Applied_Predictive_Modeling/ADS_503_team_2_final_project/data/breast_cancer_FNA_data.csv")
+data_rf <- df[, !(names(df) %in% c("X", "id"))]
+print(names(data_rf))
+
+trainingRows_rf <- createDataPartition(data_rf$diagnosis, p = 0.7, list = FALSE)
+df_train_rf <- data_rf[trainingRows_rf, ]
+df_test_rf <- data_rf[-trainingRows_rf, ]
+
+# Preprocess the training and testing data for Random Forest
+train_imp_rf <- preProcess(df_train_rf, method = c("BoxCox", 'center', 'scale'))
+train_pre_rf <- predict(train_imp_rf, df_train_rf)
+test_pre_rf <- predict(train_imp_rf, df_test_rf)
+X_train_rf <- train_pre_rf[, -which(names(train_pre_rf) == "diagnosis")]
+y_train_rf <- factor(df_train_rf$diagnosis, levels = c("B", "M"))
+X_test_rf <- test_pre_rf[, -which(names(test_pre_rf) == "diagnosis")]
+y_test_rf <- factor(df_test_rf$diagnosis, levels = c("B", "M"))
+
+# Model 1: Random Forest with Random Oversampling
+rf_fit_oversampling <- train(
+  x = X_train_rf,
+  y = y_train_rf,
+  method = 'rf',
+  metric = 'ROC',
+  trControl = trainControl(classProbs = TRUE, summaryFunction = twoClassSummary)
+)
+
+# Evaluate Model 1
+predictions_rf_1 <- predict(rf_fit_oversampling, newdata = X_test_rf)
+confusion_matrix_1 <- confusionMatrix(data = predictions_rf_1, reference = y_test_rf)
+f1_score_1 <- confusion_matrix_1$byClass["F1"]
+auc_roc_1 <- roc(predictions_rf_1, as.numeric(y_test_rf))$auc
+
+# Print results for Model 1
+print("Model 1: Random Forest with Random Oversampling")
+print(confusion_matrix_1)
+print(paste("F1-score:", f1_score_1))
+print(paste("AUC/ROC:", auc_roc_1))
+
+# Model 2: Random Forest with random 70/30 split
+
+# Split the data into training and testing sets (70/30 split)
+data_rf$diagnosis <- factor(data_rf$diagnosis)
+train_indices <- createDataPartition(data_rf$diagnosis, p = 0.7, list = FALSE)
+train_data <- data_rf[train_indices, ]
+test_data <- data_rf[-train_indices, ]
+
+# Random Forest with 70-30 split
+rf_model_split <- randomForest(
+  x = train_data[, -which(names(train_data) == "diagnosis")],
+  y = train_data$diagnosis,
+  ntree = 1000,
+  importance = TRUE
+)
+
+# Predict on the test set
+test_data$predicted_split <- predict(rf_model_split, newdata = test_data[, -which(names(test_data) == "diagnosis")])
+
+confusion_matrix_2 <- confusionMatrix(data = test_data$predicted_split, reference = test_data$diagnosis)
+
+# Calculate precision, recall, and F1-score
+precision_2 <- confusion_matrix_2$byClass["Pos Pred Value"]
+recall_2 <- confusion_matrix_2$byClass["Sensitivity"]
+f1_score_2 <- 2 * (precision_2 * recall_2) / (precision_2 + recall_2)
+
+# Extract predicted probabilities for the positive class ("M")
+predicted_probs <- predict(rf_model_split, newdata = test_data[, -which(names(test_data) == "diagnosis")], type = "prob")
+predicted_probs_M <- predicted_probs[, "M"]
+
+# Calculate AUC/ROC
+auc_roc_2 <- roc(test_data$diagnosis, predicted_probs_M)$auc
+
+# Print results for Model 2
+print("Model 3: Random Forest with K-fold cross-validation")
+print(confusion_matrix_2)
+print(paste("F1-score:", f1_score_2))
+print(paste("AUC/ROC:", auc_roc_2))
+
+
+# Model 3: Random Forest with K-fold cross-validation
+trainingRows_rf <- createDataPartition(data_rf$diagnosis, p = 0.7, list = FALSE)
+df_train_rf <- data_rf[trainingRows_rf, ]
+df_test_rf <- data_rf[-trainingRows_rf, ]
+
+# Preprocess the training and testing data for Random Forest
+train_imp_rf <- preProcess(df_train_rf, method = c("BoxCox", 'center', 'scale'))
+train_pre_rf <- predict(train_imp_rf, df_train_rf)
+test_pre_rf <- predict(train_imp_rf, df_test_rf)
+X_train_rf <- train_pre_rf[, -which(names(train_pre_rf) == "diagnosis")]
+y_train_rf <- factor(df_train_rf$diagnosis, levels = c("B", "M"))
+X_test_rf <- test_pre_rf[, -which(names(test_pre_rf) == "diagnosis")]
+y_test_rf <- factor(df_test_rf$diagnosis, levels = c("B", "M"))
+
+# Random Forest with k-fold cross-validation
+rf_model <- train(
+  x = X_train_rf,
+  y = y_train_rf,
+  method = 'rf',
+  metric = 'Accuracy',
+  trControl = trainControl(
+    method = "cv",
+    number = 10,
+    classProbs = TRUE,
+    summaryFunction = twoClassSummary
+  )
+)
+
+# Evaluate Model 3
+predictions_rf_3 <- predict(rf_model, newdata = X_test_rf)
+confusion_matrix_3 <- confusionMatrix(data = predictions_rf_3, reference = y_test_rf)
+f1_score_3 <- confusion_matrix_3$byClass["F1"]
+auc_roc_3 <- roc(predictions_rf_3, as.numeric(y_test_rf))$auc
+
+# Print results for Model 3
+print("Model 3: Random Forest with K-fold cross-validation")
+print(confusion_matrix_3)
+print(paste("F1-score:", f1_score_3))
+print(paste("AUC/ROC:", auc_roc_3))
+
+
+```
+
