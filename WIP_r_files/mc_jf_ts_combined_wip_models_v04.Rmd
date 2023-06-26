@@ -156,19 +156,25 @@ tolerance_plot
 
 
 ```{r}
-### Calculate the eigenvalues for the predictor variables to look for multicollinearity 
+# Calculate the eigenvalues for the predictor variables to look for multicollinearity 
 # Small eigenvalues suggest potential multicollinearity issues
 correlations <- cor(df_clean[-1], method = "pearson")
 eigenvalues <- eigen(correlations)$values
 eigen_table <- data.frame(Variable = colnames(correlations), Eigenvalue = eigenvalues)
 eigen_table <- eigen_table[eigen_table$Variable != "diagnosis", ]
 eigen_table <- eigen_table[order(eigen_table$Eigenvalue), ]
+# Round the Eigenvalue values for better aesthetics
+eigen_table$Eigenvalue <- round(eigen_table$Eigenvalue, 2)
+y_axis_limit <- 14
 eigen_plot <- ggplot(eigen_table, aes(x = reorder(Variable, Eigenvalue), y = Eigenvalue)) +
   geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = Eigenvalue), vjust = -0.5, hjust = 0.5, color = "black", size = 3) +  # Add value labels
   labs(x = "Variable", y = "Eigenvalue") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  ggtitle("Eigenvalues of Variables (Ascending Order)")
+  ggtitle("Eigenvalues of Variables (Ascending Order)") +
+  ylim(0, y_axis_limit)  # Set the y-axis limits
 eigen_plot
+
 ```
 
 
