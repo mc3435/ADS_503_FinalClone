@@ -285,13 +285,8 @@ accuracy_rfe <- sum(diag(confusion_matrix_rfe)) / sum(confusion_matrix_rfe)
 precision_rfe <- confusion_matrix_rfe[2, 2] / sum(confusion_matrix_rfe[, 2])
 recall_rfe <- confusion_matrix_rfe[2, 2] / sum(confusion_matrix_rfe[2, ])
 f1_score_rfe <- 2 * (precision_rfe * recall_rfe) / (precision_rfe + recall_rfe)
-
-# Calculate specificity for RFE model
 specificity_rfe <- confusion_matrix_rfe[1, 1] / sum(confusion_matrix_rfe[1, ])
-
-# Calculate sensitivity for RFE model
 sensitivity_rfe <- recall_rfe
-
 predicted_rfe_numeric <- as.numeric(predicted_rfe) - 1
 auc_rfe <- roc(test_data$diagnosis, predicted_rfe_numeric)$auc
 

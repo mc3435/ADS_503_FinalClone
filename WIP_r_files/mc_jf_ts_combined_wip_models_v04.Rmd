@@ -73,6 +73,64 @@ df_se <- df[, se_columns]
 df_worst <- df[, worst_columns]
 ```
 
+```{r}
+
+# Prepare the dataframe 
+df_clean <- df[, !(names(df) %in% c("X", "id"))]
+df_clean
+variable_names <- colnames(df_clean)
+print(variable_names)
+
+# Create empty data frames
+df_mean <- data.frame(diagnosis = df_clean$diagnosis)
+df_se <- data.frame(diagnosis = df_clean$diagnosis)
+df_worst <- data.frame(diagnosis = df_clean$diagnosis)
+
+# Loop over variable names
+for (variable_name in variable_names) {
+  # Extract the part after the "_" delimiter
+  variable_type <- sub(".+_([^_]+)$", "\\1", variable_name)
+  # Assign the column to the appropriate data frame based on variable type
+  if (variable_type == "mean") {
+    df_mean[[variable_name]] <- df_clean[[variable_name]]
+  } else if (variable_type == "se") {
+    df_se[[variable_name]] <- df_clean[[variable_name]]
+  } else if (variable_type == "worst") {
+    df_worst[[variable_name]] <- df_clean[[variable_name]]
+  }
+}
+
+### Analyze the Feature Density & Correlation between variables
+# Visualization for the "Mean" Variables
+ggpairs(df_mean, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
+  labs(title="Feature Density & Correlation - Cancer Means")+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=20))
+# Visualization for the "Standard Error" Variables
+ggpairs(df_se, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
+  labs(title="Feature Density & Correlation - Cancer Standard Error")+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=20))
+# Visualization for the "Worst" Variables
+ggpairs(df_worst, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
+  labs(title="Feature Density & Correlation - Cancer Worst (Mean of the three largest values)")+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=20))
+
+```
+
+```{r}
+
+### Analyze the Feature Density & Correlation between variables
+# Visualization for the "Mean" Variables
+ggpairs(df_mean, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
+  labs(title="Feature Density & Correlation - Cancer Means")+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=20))
+# Visualization for the "Standard Error" Variables
+ggpairs(df_se, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
+  labs(title="Feature Density & Correlation - Cancer Standard Error")+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=20))
+# Visualization for the "Worst" Variables
+ggpairs(df_worst, aes(color=diagnosis, alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
+  labs(title="Feature Density & Correlation - Cancer Worst (Mean of the three largest values)")+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=20))
+
+
+```
+
+
+
 #### df_var data frame for visualizing just predictors
 
 ```{r}
